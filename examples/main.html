@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Vase in action</title>
+    <link href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+      body {
+        background: url(http://todomvc.com/architecture-examples/backbone/bower_components/todomvc-common/bg.png) repeat;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+    <center>
+    <h1>Chat</h1>
+    <div id="login-form">
+      <input type="text" class="form-control" id="login-input" style="width:200px; display:inline-block" placeholder="Enter your name">
+      <button type="button" class="btn btn-primary">Enter</button>
+    </div>
+    <div id="chat" style="display:none">
+      <div class="chat-window form-control disabled" style="height:300px; overflow: auto; text-align: left; vertical-align: bottom"></div>
+      <input type="text" class="form-control" id="chat-input" style="width:400px; display:inline-block" placeholder="What's on your mind?">
+      <button type="button" class="btn btn-primary">Say</button>
+    </div>
+    </center>
+    </div>
+
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+  <script type="text/javascript">
+    $(function(){
+      var login = $("#login-form #login-input");
+      var msg = $("#chat #chat-input");
+      
+      var ws;
+
+      var do_login = function(){
+        var username = login.val();
+        if(username == ''){
+          login.focus();
+          return;
+        }
+
+        $('#login-form').hide();
+        $('#chat').show();
+        $('#chat input').focus();
+
+        var loc = window.location, new_uri;
+        if (loc.protocol === "https:") {
+          new_uri = "wss:";
+        } else {
+          new_uri = "ws:";
+        }
+        new_uri += "//" + loc.host;
+        new_uri += loc.pathname + "ws/chat?" + username;
+
+        ws = new WebSocket(new_uri);
+        ws.onmessage = function(e) {
+          var win = $("#chat .chat-window");
+          win.append('<div>' + e.data + '</div>');
+          win.animate({ scrollTop: win[0].scrollHeight}, 1000);
+        }
+      }
+      $('#login-form').on('click', 'button', do_login);
+      $('#login-form').on('keypress', 'input', function(e) {
+        if (e.which == 13){
+          do_login();
+        }
+      });
+      var say_it = function() {
+        var message = msg.val();
+        msg.val('');
+        if (message == '') {
+          msg.focus();
+          return;
+        }
+        ws.send(message);
+      }
+      $('#chat').on('click', 'button', say_it);
+      $('#chat').on('keypress', 'input', function(e) {
+        if (e.which == 13){
+          say_it();
+        }
+      });
+    });
+  </script>
+  </body>
+</html>
