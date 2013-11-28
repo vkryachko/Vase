@@ -1,62 +1,13 @@
-import io
 import asyncio
 from asyncio.streams import StreamWriter
+from urllib.parse import unquote
+import sys
 
 from .stream import LimitedReader
 from .exceptions import BadRequestException
 
 _DEFAULT_EXHAUST = 2**16
 DELIMITER = b'\r\n'
-
-
-class HttpMessage:
-    """Class that contains information about the request.
-
-    It is a low level container with no convenience methods, just raw data
-    """
-    def __init__(self, method, url, version, headers, peername):
-        self.method = method
-        self.url = url
-        self.version = version
-        self.headers = headers
-        self.content_length = 0
-        self.keep_alive = True
-        self.peername = peername
-        if version.lower() == 'http/1.0':
-            self.keep_alive = False
-        self._body = io.BytesIO(b'')
-        self._raw_stream = None
-        for name, value in self.headers:
-            if name.lower() == b'content-length':
-                try:
-                    self.content_length = int(value)
-                except ValueError:
-                    pass
-            elif name.lower() == b'connection':
-                lvalue = value.lower()
-                if lvalue == 'close':
-                    self.keep_alive = False
-                elif lvalue == 'keep-alive':
-                    self.keep_alive = True
-
-
-    @property
-    def body(self):
-        return self._body
-
-    @body.setter
-    def body(self, stream):
-        self._raw_stream = stream
-        self._body = LimitedReader(stream, self.content_length)
-
-    @asyncio.coroutine
-    def _exhaust_body(self):
-        b = self._body
-        while b.bytes_left:
-            to_read = b.bytes_left
-            if to_read > _DEFAULT_EXHAUST:
-                to_read = _DEFAULT_EXHAUST
-            yield from b.read(to_read)
 
 
 class HttpWriter(StreamWriter):
@@ -106,7 +57,7 @@ class HttpWriter(StreamWriter):
         return self._status_written
     
 
-class HttpParser:
+class WsgiParser:
     @staticmethod
     @asyncio.coroutine
     def parse(reader):
@@ -121,10 +72,17 @@ class HttpParser:
         except ValueError:
             raise BadRequestException()
 
+        try:
+            path, query = url.split('?')
+        except ValueError:
+            path = url
+            query = ''
+
         peer = reader._transport.get_extra_info('peername')
+        sslctx = reader._transport.get_extra_info('sslcontext')
         ip, port = peer[0], peer[1]
 
-        headers = []
+        headers = {}
         while True:
             l = yield from reader.readline()
             if l == DELIMITER:
@@ -136,10 +94,35 @@ class HttpParser:
             except ValueError:
                 raise BadRequestException()
             else:
-                headers.append((name, value))
-        msg = HttpMessage(method, url, version, headers, reader._transport.get_extra_info('peername'))
-        msg.extras = reader._transport._extra
-        msg.body = reader
-        return msg
+                hname = 'HTTP_{}'.format(name.decode('ascii').replace('-', '_').upper())
+                if hname not in headers:
+                    headers[hname] = value.decode('ascii')
+                else:
+                    sep = ','
+                    if hname == 'HTTP_COOKIE':
+                        sep = ';'
+                    headers[hname] += "{}{}".format(sep, value)
+        try:
+            content_length = int(headers.get('HTTP_CONTENT_LENGTH', '0'))
+        except ValueError:
+            content_length = 0
+        environ = {
+            'REQUEST_METHOD': method,
+            'SCRIPT_NAME': '',
+            'PATH_INFO': unquote(path),
+            'QUERY_STRING': unquote(query),
+            'REMOTE_ADDR': ip,
+            'SERVER_PROTOCOL': version,
+            'REMOTE_PORT': port,
+            'wsgi.input': LimitedReader(reader, content_length),
+            'wsgi.error': sys.stderr,
+            'wsgi.version': (1, 0),
+            'wsgi.multithread': False,
+            'wsgi.multiprocess': False,
+            'wsgi.run_once': False,
+            'wsgi.url_scheme': 'http' if sslctx is None else 'https',
+        }
+        environ.update(headers)
+        return environ
 
 

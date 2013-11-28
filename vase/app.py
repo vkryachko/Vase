@@ -2,7 +2,7 @@ import asyncio
 import functools
 import collections
 from routes import Mapper
-from .websocket import WebSocketProtocol
+from .webserver import WebServer
 from .request import HttpRequest
 from .response import HttpResponse
 
@@ -81,6 +81,6 @@ class Vase:
     def run(self, *, host='0.0.0.0', port=3000, loop=None):
         if loop is None:
             loop = asyncio.get_event_loop()
-        asyncio.async(loop.create_server(lambda: WebSocketProtocol(loop=loop, app=self),
+        asyncio.async(loop.create_server(lambda: WebServer(loop=loop, app=self),
                     host, port))
         loop.run_forever()
