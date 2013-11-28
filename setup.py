@@ -10,7 +10,7 @@ if sys.version_info < (3, 4):
 
 setup(
     name="Vase",
-    version="0.1.2",
+    version="0.1.3",
     author = "Vladimir Kryachko",
     author_email = "v.kryachko@gmail.com",
     description = "Async Web framework based on Tulip/asyncio",
