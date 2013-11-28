@@ -12,6 +12,9 @@ from enum import Enum
 MAGIC = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
 
 class OpCode(Enum):
+    """
+    WebSocket opcodes as defined in RFC 6455
+    """
     continuation = 0
     text = 1
     binary = 2
@@ -25,6 +28,9 @@ class OpCode(Enum):
 
 
 class Frame:
+    """
+    WebSocket frame
+    """
     __slots__ = ('fin', 'opcode', 'payload')
     def __init__(self, fin, opcode, payload):
         self.fin = fin
@@ -33,6 +39,9 @@ class Frame:
 
     @property
     def is_ctrl(self):
+        """
+        Returns True if it is a control frame
+        """
         return self.opcode.is_ctrl
 
 
@@ -45,11 +54,17 @@ class Message:
 
     @property
     def is_ctrl(self):
+        """
+        Returns True if it is a control frame
+        """
         return self.opcode.is_ctrl
 
-    @staticmethod
-    def close_message():
-        return Message(Opcode.close, b'', b'')
+    @classmethod
+    def close_message(cls, reason, *, message=b''):
+        """
+        Creates a 'close' message with specified reason code and optional message
+        """
+        return cls(Opcode.close, b'', b'')
 
 
 
@@ -63,6 +78,9 @@ class WebSocketFormatException(Exception):
 
 
 class WebSocketParser:
+    """
+    This object is instantiated for each connection
+    """
     def __init__(self, reader):
         self._reader = reader
         self._frames = collections.deque()
@@ -111,6 +129,8 @@ class WebSocketParser:
         rsv3 = (first_byte >> 4) & 1
         opcode = first_byte & 0xf
 
+        length = (second_byte) & 0x7f
+
         try:
             opcode = OpCode(opcode)
         except ValueError:
@@ -130,7 +150,6 @@ class WebSocketParser:
         if not has_mask:
             raise WebSocketFormatException("Clients MUST mask their frames")
 
-        length = (second_byte) & 0x7f
 
         if length == 126:
             data = yield from reader.read(2)
