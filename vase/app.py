@@ -78,9 +78,9 @@ class Vase:
 
         return wrap
 
-    def run(self, loop=None):
+    def run(self, *, host='0.0.0.0', port=3000, loop=None):
         if loop is None:
             loop = asyncio.get_event_loop()
         asyncio.async(loop.create_server(lambda: WebSocketProtocol(loop=loop, app=self),
-                    '0.0.0.0', 3000, ssl=None))
+                    host, port))
         loop.run_forever()
