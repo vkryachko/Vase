@@ -12,6 +12,7 @@ from .websocket import (
     MAGIC,
     OpCode,
 )
+from .log import logger
 import sys
 
 def should_close_conn_immediately(environ):
@@ -43,10 +44,11 @@ def is_websocket_request(environ):
     return True
 
 
-def task_done(task):
-    exc = task.exception()
-    if exc is not None:
-        task.print_stack()
+def _maybe_log_exception(task):
+    try:
+        task.result()
+    except:
+        logger.exception("An exception ocurred while serving request")
 
 class WebServer(asyncio.StreamReaderProtocol):
     KEEP_ALIVE = 20
@@ -68,8 +70,8 @@ class WebServer(asyncio.StreamReaderProtocol):
                                 self._loop)
 
         task = asyncio.async(self._handle_client())
+        task.add_done_callback(_maybe_log_exception)
 
-        task.add_done_callback(task_done)
         self._reset_timeout()
 
     def connection_lost(self, exc):
@@ -130,7 +132,10 @@ class WebServer(asyncio.StreamReaderProtocol):
         if is_websocket_request(environ):
             yield from self._handle_websocket(environ)
             return
+        yield from self._handle_wsgi(environ)
 
+    @asyncio.coroutine
+    def _handle_wsgi(self, environ):
         def start_response(status, headers, exc_info=None):
             self.writer.write_status(status)
             self.writer.write_headers(headers)
@@ -212,9 +217,6 @@ class WebServer(asyncio.StreamReaderProtocol):
             body = str(exc.args[0]).encode('utf-8')
         writer.write_header('Content-Length', str(len(body)))
         writer.write_body(body)
-
-    def __del__(self):
-        print("deleting")
 
 
 if __name__ == '__main__':
