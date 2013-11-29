@@ -1,12 +1,14 @@
 Vase is a webframework for Tulip/asyncio
-------------------
+~~~~~~~~~~~~~~~~~~~~~~
 
 Inspired by Flask
 It currently has a basic WSGI interface and WebSocket support.
 A demo websocket app is available here http://vase-chat.herokuapp.com/
 
 Sample echo app
-------------------
+~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
 
     from vase import Vase
 
