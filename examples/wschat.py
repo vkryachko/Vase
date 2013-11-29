@@ -20,22 +20,31 @@ class Endpoint:
         return True
 
     def on_connect(self):
-        if self.bag.get('users', None) is None:
+        if 'users' not in self.bag:
             self.bag['users'] = {}
 
-        self.bag['users'][self.username] = self.transport
+        users = self.bag['users']
+
+        users[self.username] = self.transport
+
+        self.broadcast("User '{}' entered chat".format(self.username))
 
     def on_message(self, message):
         if isinstance(message, bytes):
             message = message.decode('utf-8')
 
+        now = datetime.now().strftime("%H:%M:%S")
+        msg = "[{}] {}: {}".format(now, self.username, html.escape(message))
+        self.broadcast(msg)
+
+    def broadcast(self, message):
         for username, transport in self.bag['users'].items():
-            now = datetime.now().strftime("%H:%M:%S")
-            transport.send("[{}] {}: {}".format(now, self.username, html.escape(message)))
+            transport.send(message)
 
 
     def on_close(self, exc=None):
-        del self.bag['users'][self.username]
+        users = self.bag['users']
+        del users[self.username]
         print('closed')
 
 if __name__ == '__main__':

@@ -164,10 +164,11 @@ class WebServer(asyncio.StreamReaderProtocol):
         handler.transport = WebSocketWriter(self._transport)
         handler.loop = self._loop
 
-        if not (yield from asyncio.coroutine(handler.authorize_request)(environ)):
-            writer.write_status(b'401 Anauthorized')
-            writer.write_body(b'')
-            return            
+        if hasattr(handler, 'authorize_request'):
+            if not (yield from asyncio.coroutine(handler.authorize_request)(environ)):
+                writer.write_status(b'401 Anauthorized')
+                writer.write_body(b'')
+                return
 
         key = environ['HTTP_SEC_WEBSOCKET_KEY']
 
@@ -184,8 +185,8 @@ class WebServer(asyncio.StreamReaderProtocol):
     def _switch_protocol(self, handler):
         #self._disable_timeout()
         self._ws_handler = handler
-        self._ws_handler.on_connect()
         self._in_ws_mode = True
+        self._ws_handler.on_connect()
 
         #self._stream_reader = StreamReader(loop=self._loop)
         #self._stream_reader.set_transport(self._transport)
