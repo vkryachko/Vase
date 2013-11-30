@@ -19,6 +19,6 @@ class LimitedReader:
     @property
     def bytes_left(self):
         left = self._limit - self._read_count
-        if left < 0:
+        if left < 0:  # pragma: no cover
             left = 0
         return left

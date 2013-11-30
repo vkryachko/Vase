@@ -11,6 +11,7 @@ from .websocket import (
     WebSocketParser,
     MAGIC,
     OpCode,
+    FrameBuilder,
 )
 from .log import logger
 import sys
@@ -124,7 +125,7 @@ class WebServer(asyncio.StreamReaderProtocol):
         if not self._in_ws_mode:
             self.writer.close()
         else:
-            self._ws_handler.transport._write_ws(OpCode.ping, b'')
+            self._transport.write(FrameBuilder.ping(masked=False))
             self._reset_timeout()
 
     @asyncio.coroutine
@@ -202,11 +203,11 @@ class WebServer(asyncio.StreamReaderProtocol):
                 return
             if msg.is_ctrl:
                 if msg.opcode == OpCode.close:
-                    self._ws_handler.transport._write_ws(OpCode.close, b'')
+                    self._transport.write(FrameBuilder.close(masked=False))
                     self._transport.close()
                     return
                 elif msg.opcode == OpCode.ping:
-                    self._ws_handler.transport._write_ws(OpCode.pong, b'')
+                    self._transport.write(FrameBuilder.pong(masked=False))
             else:
                 self._ws_handler.on_message(msg.payload)
 
@@ -218,10 +219,3 @@ class WebServer(asyncio.StreamReaderProtocol):
             body = str(exc.args[0]).encode('utf-8')
         writer.write_header('Content-Length', str(len(body)))
         writer.write_body(body)
-
-
-if __name__ == '__main__':
-    loop = asyncio.get_event_loop()
-
-    asyncio.async(loop.create_server(lambda: WebServer(loop=loop), 'localhost', 3000))
-    loop.run_forever()

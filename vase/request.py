@@ -8,9 +8,7 @@ _FORM_URLENCODED = 'application/x-www-form-urlencoded'
 class MultiDict(dict):
     def __getitem__(self, key):
         value = super().__getitem__(key)
-        if type(value) is list and value:
-            return value[0]
-        raise KeyError(key)
+        return value[0]
 
     def __setitem__(self, key, value):
         super().__setitem__(key, [value])
@@ -35,7 +33,7 @@ class MultiDict(dict):
     def lists(self):
         return super().items()
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover
         return "<MultiDict {}>".format(super().__repr__())
 
 
@@ -49,11 +47,12 @@ class HttpRequest:
         self.POST = MultiDict()
         self._cookies = None
         self._post_inited = False
+        self._get = None
 
     @property
     def GET(self):
         if self._get is None:
-            self._get = MultiDict(urllib.parse.parse_qs(self.ENV.get('QUERY_STRING')))
+            self._get = MultiDict(urllib.parse.parse_qs(self.ENV.get('QUERY_STRING'), keep_blank_values=True))
         return self._get
 
 
@@ -62,7 +61,7 @@ class HttpRequest:
         if self._cookies is None:
             try:
                 c = SimpleCookie(self.ENV.get('HTTP_COOKIE', ''))
-            except CookieError:
+            except CookieError:  # pragma: no cover
                 self._cookies = {}
             else:
                 res = {}
@@ -81,4 +80,5 @@ class HttpRequest:
         if self._has_form():
             body = yield from self.ENV['wsgi.input'].read()
             self.POST = MultiDict(urllib.parse.parse_qs(body.decode('utf-8')))
+        self._post_inited = True
 

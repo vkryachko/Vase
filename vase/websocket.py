@@ -7,8 +7,94 @@ from hashlib import sha1
 import collections
 import struct
 from enum import Enum
+import os
 
 MAGIC = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
+
+
+class FrameBuilder:
+    @classmethod
+    def build(cls, *, fin, opcode, payload, masked):
+        if isinstance(payload, str):
+            payload = payload.encode('utf-8')
+
+        first_byte = cls._build_first_byte(fin, opcode)
+
+        length_bytes = cls._build_mask_and_length(masked, len(payload))
+
+        mask = b''
+        if masked:
+            mask = cls._random_mask()
+            payload = cls._mask_payload(payload, mask)
+
+        return b''.join([first_byte, length_bytes, mask, payload])
+
+
+    @classmethod
+    def continuation(cls, payload, *, fin=True, masked=True):
+        return cls.build(opcode=OpCode.continuation, fin=fin, payload=payload, masked=masked)
+
+    @classmethod
+    def text(cls, payload, *, fin=True, masked=True):
+        return cls.build(opcode=OpCode.text, fin=fin, payload=payload, masked=masked)
+
+    @classmethod
+    def binary(cls, payload, *, fin=True, masked=True):
+        return cls.build(opcode=OpCode.binary, fin=fin, payload=payload, masked=masked)
+
+    @classmethod
+    def close(cls, code=None, *, payload=b'', masked=True):
+        if payload != b'' and code is None:
+            code = 1000
+        if isinstance(payload, str):
+            payload = payload.encode('utf-8')
+        if code is not None:
+            payload = b''.join((struct.pack("!H", code), payload))
+        return cls.build(opcode=OpCode.close, fin=True, payload=payload, masked=masked)
+
+    @classmethod
+    def ping(cls, payload=b'', *, masked=True):
+        return cls.build(opcode=OpCode.ping, fin=True, payload=payload, masked=masked)
+
+    @classmethod
+    def pong(cls, payload=b'', *, masked=True):
+        return cls.build(opcode=OpCode.pong, fin=True, payload=payload, masked=masked)
+
+    @staticmethod
+    def _build_first_byte(fin, opcode):
+        first_byte = (1<<7) | opcode.value
+        if not fin:
+            first_byte = first_byte & 0x7f
+        return struct.pack("!B", first_byte)
+
+    @staticmethod
+    def _build_mask_and_length(masked, length):
+        original_length = length
+        extra_length = b''
+
+        if original_length >= 2**16:
+            length = 127
+        elif original_length >= 125:
+            length = 126
+
+        if length == 126:
+            extra_length = struct.pack('!H', original_length)
+        elif length == 127:
+            extra_length = struct.pack('!Q', original_length)
+
+        if masked:
+            length |= 0x80
+
+        return b''.join((struct.pack('!B', length), extra_length))
+
+    @staticmethod
+    def _random_mask():
+        return os.urandom(4)
+
+    @staticmethod
+    def _mask_payload(payload, mask):
+        return bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+
 
 class OpCode(Enum):
     """
@@ -43,10 +129,13 @@ class Frame:
         """
         return self.opcode.is_ctrl
 
+    def __repr__(self):  # pragma: no cover
+        return "<Frame fin:{} opcode:{} payload:\"{}\">".format(self.fin, self.opcode, self.payload)
+
 
 class Message:
     __slots__ = ('opcode', 'payload', 'ext_data')
-    def __init__(self, opcode, payload, ext_data):
+    def __init__(self, opcode, payload=b'', ext_data=b''):
         self.opcode = opcode
         self.payload = payload
         self.ext_data = ext_data
@@ -59,11 +148,13 @@ class Message:
         return self.opcode.is_ctrl
 
     @classmethod
-    def close_message(cls, reason, *, message=b''):
+    def close_message(cls, code=None, *, payload=b''):
         """
         Creates a 'close' message with specified reason code and optional message
         """
-        return cls(Opcode.close, b'', b'')
+        if code is not None:
+            payload = b''.join((struct.pack("!H", code), payload))
+        return cls(OpCode.close, payload)
 
 
 
@@ -72,7 +163,7 @@ class WebSocketFormatException(Exception):
         if len(args) > 0:
             self.reason = args[0]
         else:
-            self.reasons = None
+            self.reason = None
         super().__init__(*args)
 
 
@@ -178,33 +269,13 @@ class WebSocketParser:
 
 
 class WebSocketWriter(StreamWriter):
-    def __init__(self, transport, *, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        self._loop = loop
+    def __init__(self, transport):
         self._transport = transport
 
-    def send(self, msg, later=False):
-        opcode = OpCode.text
+    def send(self, msg):
         if isinstance(msg, bytes):
-            opcode = OpCode.binary
+            mbytes = FrameBuilder.binary(msg, masked=False)
         else:
-            msg = msg.encode('utf-8')
+            mbytes = FrameBuilder.text(msg, masked=False)
 
-        self._write_ws(opcode, msg, later)
-
-    def _write_ws(self, opcode, payload, later=False):
-        first_byte = bytes([(1<<7) | opcode.value])
-        length = len(payload)
-        if length <= 125:
-            len_bytes = bytes([length])
-        elif length < 2**16:
-            len_bytes = struct.pack('!BH', 126, length)
-        else:
-            len_bytes = struct.pack('!BQ', 127, length)
-        msg = b''.join([first_byte, len_bytes, payload])
-        
-        if not later:
-            self._transport.write(msg)
-        else:
-            self._loop.call_soon(lambda: self._transport.write(msg))
+        self._transport.write(mbytes)
