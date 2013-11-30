@@ -38,7 +38,7 @@ class HttpWriter(StreamWriter):
     def _maybe_finalize_headers(self):
         if not self._headers_sent:
             self.write(self.delimiter)
-        self._headers_sent = True
+            self._headers_sent = True
 
     def write_body(self, data):
         self._maybe_finalize_headers()
@@ -101,7 +101,7 @@ class WsgiParser:
                     sep = ','
                     if hname == 'HTTP_COOKIE':
                         sep = ';'
-                    headers[hname] += "{}{}".format(sep, value)
+                    headers[hname] += "{}{}".format(sep, value.decode('ascii'))
         try:
             content_length = int(headers.get('HTTP_CONTENT_LENGTH', '0'))
         except ValueError:
