@@ -1,5 +1,7 @@
 language: python
 python:
   - "3.3"
-install: "python setup.py develop"
+install:
+  - "python setup.py develop"
+  - "pip install coverage"
 script: "python runtests.py --coverage"
