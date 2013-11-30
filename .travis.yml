@@ -1,0 +1,5 @@
+language: python
+python:
+  - "3.3"
+install: "python setup.py develop"
+script: "python runtests.py --coverage"
