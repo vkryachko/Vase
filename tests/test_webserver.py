@@ -1,4 +1,7 @@
+import gc
+import asyncio
 import unittest
+import unittest.mock
 from vase.webserver import (
     should_close_conn_immediately,
     is_websocket_request,
@@ -64,3 +67,21 @@ class IsWebSocketRequestTests(unittest.TestCase):
         env = WEBSOCKET_HEADERS.copy()
         env.pop('HTTP_UPGRADE')
         self.assertFalse(is_websocket_request(env))
+
+
+class WebServerTests(unittest.TestCase):
+    def setUp(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(None)
+
+    def tearDown(self):
+        asyncio.test_utils.run_briefly(self.loop)
+
+        self.loop.close()
+        gc.collect()
+
+    def test1(self):
+        reader = asyncio.StreamReader(loop=self.loop)
+        app = unittest.mock.Mock()
+        server = WebServer(reader, app=app, loop=self.loop)
+

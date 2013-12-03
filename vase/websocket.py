@@ -2,6 +2,11 @@ import asyncio
 from asyncio.streams import StreamWriter, StreamReader
 import ssl
 from .exceptions import BadRequestException
+from .wsgi import (
+    WsgiHandler,
+    WsgiProtocol,
+    request_to_wsgi,
+)
 from base64 import b64encode
 from hashlib import sha1
 import collections
@@ -279,3 +284,100 @@ class WebSocketWriter(StreamWriter):
             mbytes = FrameBuilder.text(msg, masked=False)
 
         self._transport.write(mbytes)
+
+
+def is_websocket_request(req):
+    upgrade = req.get('upgrade', '').lower()
+    connection = req.get('connection', '').lower()
+    key = req.get('sec-websocket-key', None)
+    version = req.get('sec-websocket-version', None)
+    if upgrade != 'websocket' or 'upgrade' not in connection or key is None or version != '13':
+        return False
+    return True
+
+
+class WebSocketWsgiHandler(WsgiHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._in_ws_mode = False
+
+    @asyncio.coroutine
+    def handle_request(self, request):
+        if is_websocket_request(request):
+            yield from self.handle_websocket(request)
+            return
+
+        yield from super().handle_request(request)
+
+    def on_timeout(self):
+        if self._in_ws_mode:
+            self._transport.write(FrameBuilder.ping(masked=False))
+            return True
+        else:
+            return super().on_timeout()
+
+    @asyncio.coroutine
+    def handle_websocket(self, request):
+        writer = self._writer
+        environ = request_to_wsgi(request)
+        handler = self._app.initialize_endpoint(environ)
+        if handler is None:
+            data = "Not found".encode('utf-8')
+            writer.write_status(b'404 Not Found')
+            writer.write_headers((
+                ('Content-Length', str(len(data))),
+            ))
+            writer.write_body(data)
+            return
+
+        handler.transport = WebSocketWriter(self._transport)
+
+        if hasattr(handler, 'authorize_request'):
+            if not (yield from asyncio.coroutine(handler.authorize_request)(environ)):
+                writer.write_status(b'401 Anauthorized')
+                writer.write_body(b'')
+                return
+
+        key = environ['HTTP_SEC_WEBSOCKET_KEY']
+
+        accept = sha1(key.encode('ascii') + MAGIC).digest()
+        writer.write_status(b'101 Switching Protocols')
+        writer.write_headers((
+            (b'Upgrade', b'websocket',),
+            (b'Connection', b'Upgrade'),
+            (b'Sec-WebSocket-Accept', b64encode(accept))
+        ))
+        writer.write_body(b'')
+        yield from self._switch_protocol(handler)
+
+    def _switch_protocol(self, handler):
+        #self._disable_timeout()
+        self._ws_handler = handler
+        self._in_ws_mode = True
+        self._ws_handler.on_connect()
+
+        #self._stream_reader = StreamReader(loop=self._loop)
+        #self._stream_reader.set_transport(self._transport)
+
+        yield from self._parse_messages()
+
+    @asyncio.coroutine
+    def _parse_messages(self):
+        parser = WebSocketParser(self._reader)
+        while True:
+            msg = yield from parser.get_message()
+            if msg is None:
+                return
+            if msg.is_ctrl:
+                if msg.opcode == OpCode.close:
+                    self._transport.write(FrameBuilder.close(masked=False))
+                    self._transport.close()
+                    return
+                elif msg.opcode == OpCode.ping:
+                    self._transport.write(FrameBuilder.pong(masked=False))
+            else:
+                self._ws_handler.on_message(msg.payload)
+
+
+class WebSocketWsgiProtocol(WsgiProtocol):
+    handler_factory = WebSocketWsgiHandler

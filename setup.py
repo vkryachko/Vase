@@ -1,5 +1,5 @@
 import sys
-from setuptools import setup
+from setuptools import setup, find_packages
 
 install_requires = [
     'routes==2.0'
@@ -20,5 +20,5 @@ setup(
         "Programming Language :: Python :: 3.3",
     ],
     install_requires = install_requires,
-    packages=["vase"],
+    packages=find_packages(exclude=["*.tests", "*.tests.*", "tests.*", "tests"]),
 )
