@@ -1,5 +1,5 @@
 import unittest
-unittest.mock
+import unittest.mock
 
 from vase.response import (
     status_line,
