@@ -29,7 +29,7 @@ Sample echo app
         WebSocket endpoint
         Has the following attributes:
         `bag` - a dictionary that is shared between all instances of this endpoint
-        `transport` - used to send messages into the websocket
+        `transport` - used to send messages into the websocket, has send(message), close() methods
         """
         def on_connect(self):
             self.transport.send("You are successfully connected")

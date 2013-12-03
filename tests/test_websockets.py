@@ -156,12 +156,6 @@ class WebSocketParserTests(unittest.TestCase):
         self.loop.close()
         gc.collect()
 
-    def tearDown(self):
-        test_utils.run_briefly(self.loop)
-
-        self.loop.close()
-        gc.collect()
-
     def test_binary_message(self):
         reader = asyncio.StreamReader(loop=self.loop)
         parser = WebSocketParser(reader)
@@ -393,3 +387,10 @@ class WebsocketWriterTests(unittest.TestCase):
         ww.send('пы')
         transport.seek(0)
         self.assertEqual(transport.read(), b'\x81\x04\xd0\xbf\xd1\x8b')
+
+    def test_writer_close(self):
+        transport = BytesIO()
+        ww = WebSocketWriter(transport)
+        ww.close()
+        transport.seek(0)
+        self.assertEqual(transport.read(), FrameBuilder.close(masked=False))

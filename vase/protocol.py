@@ -22,6 +22,9 @@ class BaseHandler:
     def on_timeout(self):
         self._transport.close()
 
+    def connection_lost(self, exc):
+        pass
+
 
 class BaseHttpProtocol(asyncio.StreamReaderProtocol):
     handler_factory = BaseHandler
@@ -51,10 +54,14 @@ class BaseHttpProtocol(asyncio.StreamReaderProtocol):
     def connection_lost(self, exc):
         self._task.cancel()
         self._task = None
+        handler = self._handler
         self._writer = None
         self._handler = None
         self._stop_timeout()
-        super().connection_lost(exc)
+        try:
+            handler.connection_lost(exc)
+        finally:
+            super().connection_lost(exc)
 
     def data_received(self, data):
         self._reset_timeout()
@@ -65,7 +72,6 @@ class BaseHttpProtocol(asyncio.StreamReaderProtocol):
         while True:
             try:
                 req = yield from HttpParser.parse(self._reader)
-                print(req)
             except BadRequestException as e:
                 self._bad_request(self._writer, e)
                 self._writer.close()

@@ -285,6 +285,9 @@ class WebSocketWriter(StreamWriter):
 
         self._transport.write(mbytes)
 
+    def close(self):
+        self._transport._ws_closing = True
+        self._transport.write(FrameBuilder.close(masked=False))
 
 def is_websocket_request(req):
     upgrade = req.get('upgrade', '').lower()
@@ -300,6 +303,7 @@ class WebSocketWsgiHandler(WsgiHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._in_ws_mode = False
+        self._ws_handler = None
 
     @asyncio.coroutine
     def handle_request(self, request):
@@ -315,6 +319,11 @@ class WebSocketWsgiHandler(WsgiHandler):
             return True
         else:
             return super().on_timeout()
+
+    def connection_lost(self, exc):
+        if self._ws_handler:
+            self._ws_handler.on_close(exc)
+        super().connection_lost(exc)
 
     @asyncio.coroutine
     def handle_websocket(self, request):
@@ -351,13 +360,9 @@ class WebSocketWsgiHandler(WsgiHandler):
         yield from self._switch_protocol(handler)
 
     def _switch_protocol(self, handler):
-        #self._disable_timeout()
         self._ws_handler = handler
         self._in_ws_mode = True
         self._ws_handler.on_connect()
-
-        #self._stream_reader = StreamReader(loop=self._loop)
-        #self._stream_reader.set_transport(self._transport)
 
         yield from self._parse_messages()
 
@@ -370,7 +375,8 @@ class WebSocketWsgiHandler(WsgiHandler):
                 return
             if msg.is_ctrl:
                 if msg.opcode == OpCode.close:
-                    self._transport.write(FrameBuilder.close(masked=False))
+                    if not hasattr(self._transport, '_ws_closing'):
+                        self._transport.write(FrameBuilder.close(masked=False))
                     self._transport.close()
                     return
                 elif msg.opcode == OpCode.ping:
