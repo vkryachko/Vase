@@ -79,7 +79,7 @@ class FrameBuilder:
 
         if original_length >= 2**16:
             length = 127
-        elif original_length >= 125:
+        elif original_length > 125:
             length = 126
 
         if length == 126:
