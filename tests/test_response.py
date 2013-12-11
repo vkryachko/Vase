@@ -9,7 +9,7 @@ from vase.response import (
 
 class HttpResponseTests(unittest.TestCase):
     def test_status_line(self):
-        self.assertEqual(status_line(404), b'404 NOT FOUND')
+        self.assertEqual(status_line(404), b'404 Not Found')
 
     def test_http_response(self):
         resp = HttpResponse(b'foo')
