@@ -2,7 +2,7 @@ import sys
 from setuptools import setup, find_packages
 
 install_requires = [
-    'routes==2.0'
+    'routes==2.0',
 ]
 if sys.version_info < (3, 4):
     install_requires.append('enum34')

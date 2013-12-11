@@ -58,8 +58,8 @@ class Vase:
     def _handle_404(self, environ, start_response):
         data = 'Not found'.encode('utf-8')
         headers = (
-            ('Content-Type', 'text/plain'),
-            ('Content-Length', str(len(data)))
+            (b'Content-Type', b'text/plain'),
+            (b'Content-Length', str(len(data)).encode('utf-8'))
         )
         start_response(b'404 Not Found', headers)
         return [data]

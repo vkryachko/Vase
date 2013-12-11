@@ -1,67 +1,13 @@
+import time
+from http.cookies import SimpleCookie
+from email.utils import formatdate
+from http.server import BaseHTTPRequestHandler
 
-STATUS_MAP = {
-    100: 'CONTINUE',
-    101: 'SWITCHING PROTOCOLS',
-    102: 'PROCESSING',
-    200: 'OK',
-    201: 'CREATED',
-    202: 'ACCEPTED',
-    203: 'NON-AUTHORITATIVE INFORMATION',
-    204: 'NO CONTENT',
-    205: 'RESET CONTENT',
-    206: 'PARTIAL CONTENT',
-    207: 'MULTI-STATUS',
-    208: 'ALREADY REPORTED',
-    226: 'IM USED',
-    300: 'MULTIPLE CHOICES',
-    301: 'MOVED PERMANENTLY',
-    302: 'FOUND',
-    303: 'SEE OTHER',
-    304: 'NOT MODIFIED',
-    305: 'USE PROXY',
-    306: 'RESERVED',
-    307: 'TEMPORARY REDIRECT',
-    400: 'BAD REQUEST',
-    401: 'UNAUTHORIZED',
-    402: 'PAYMENT REQUIRED',
-    403: 'FORBIDDEN',
-    404: 'NOT FOUND',
-    405: 'METHOD NOT ALLOWED',
-    406: 'NOT ACCEPTABLE',
-    407: 'PROXY AUTHENTICATION REQUIRED',
-    408: 'REQUEST TIMEOUT',
-    409: 'CONFLICT',
-    410: 'GONE',
-    411: 'LENGTH REQUIRED',
-    412: 'PRECONDITION FAILED',
-    413: 'REQUEST ENTITY TOO LARGE',
-    414: 'REQUEST-URI TOO LONG',
-    415: 'UNSUPPORTED MEDIA TYPE',
-    416: 'REQUESTED RANGE NOT SATISFIABLE',
-    417: 'EXPECTATION FAILED',
-    418: 'I\'M A TEAPOT',
-    422: 'UNPROCESSABLE ENTITY',
-    423: 'LOCKED',
-    424: 'FAILED DEPENDENCY',
-    426: 'UPGRADE REQUIRED',
-    428: 'PRECONDITION REQUIRED',
-    429: 'TOO MANY REQUESTS',
-    431: 'REQUEST HEADER FIELDS TOO LARGE',
-    500: 'INTERNAL SERVER ERROR',
-    501: 'NOT IMPLEMENTED',
-    502: 'BAD GATEWAY',
-    503: 'SERVICE UNAVAILABLE',
-    504: 'GATEWAY TIMEOUT',
-    505: 'HTTP VERSION NOT SUPPORTED',
-    506: 'VARIANT ALSO NEGOTIATES',
-    507: 'INSUFFICIENT STORAGE',
-    508: 'LOOP DETECTED',
-    510: 'NOT EXTENDED',
-    511: 'NETWORK AUTHENTICATION REQUIRED',
-}
+STATUS_MAP = BaseHTTPRequestHandler.responses
+
 
 def status_line(status):
-    line = STATUS_MAP[status]
+    line = STATUS_MAP[status][0]
     return "{} {}".format(status, line).encode('ascii')
 
 class HttpResponse:
@@ -70,6 +16,7 @@ class HttpResponse:
             body = body.encode('utf-8')
         self._body = body
         self._status = int(status)
+        self._cookies = SimpleCookie()
         self._headers = [
             ('Content-Encoding', 'UTF-8'),
             ('Content-Type', content_type),
@@ -83,6 +30,34 @@ class HttpResponse:
         return [self._body]
 
 
-    def _get_headers(self):
-        return [(x.encode('ascii'), y.encode('ascii')) for x, y in self._headers]
+    def set_cookie(self, name, value='', max_age=None, path='/',
+                   domain=None, secure=False, httponly=False):
+        self._cookies[name] = value
+        if max_age is not None:
+            self._cookies[name]['max-age'] = max_age
+            if not max_age:
+                expires_date = 'Thu, 01-Jan-1970 00:00:00 GMT'
+            else:
+                dt = formatdate(time.time() + max_age)
+                expires_date = '%s-%s-%s GMT' % (dt[:7], dt[8:11], dt[12:25])
 
+            self._cookies[name]['expires'] = expires_date
+
+
+        if path is not None:
+            self._cookies[name]['path'] = path
+        if domain is not None:
+            self._cookies[name]['domain'] = domain
+        if secure:
+            self._cookies[name]['secure'] = True
+        if httponly:
+            self._cookies[name]['httponly'] = True
+
+    def delete_cookie(self, key, path='/', domain=None):
+        self.set_cookie(key, max_age=0, path=path, domain=domain)
+
+    def _get_headers(self):
+        headers = [(x.encode('ascii'), y.encode('ascii')) for x, y in self._headers]
+        for c in self._cookies.values():
+            headers.append((b'Set-Cookie', c.output(header='').encode('ascii')))
+        return headers
