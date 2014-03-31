@@ -42,7 +42,6 @@ class RequestTests(unittest.TestCase):
         req = HttpRequest(env)
 
     def test_maybe_init_post(self):
-        req = HttpRequest(ENVIRON)
         env = ENVIRON.copy()
         loop = asyncio.new_event_loop()
         stream = asyncio.StreamReader(loop=loop)
@@ -58,6 +57,7 @@ class RequestTests(unittest.TestCase):
         loop.run_until_complete(task)
         self.assertEqual(req.POST, MultiDict(foo=['bar'], baz=['far']))
 
+        stream._eof = False
         task = asyncio.Task(req._maybe_init_post(), loop=loop)
         def feed():
             stream.feed_data(b'foo=bar&baz=far')
@@ -66,10 +66,10 @@ class RequestTests(unittest.TestCase):
 
         loop.run_until_complete(task)
 
+
         env['HTTP_CONTENT_TYPE'] = 'application/json'
-
         req = HttpRequest(env)
-
+        stream._eof = False
         task = asyncio.Task(req._maybe_init_post(), loop=loop)
         loop.call_soon(feed)
 

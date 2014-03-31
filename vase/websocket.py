@@ -1,5 +1,5 @@
 import asyncio
-from asyncio.streams import StreamWriter, StreamReader
+from asyncio.streams import StreamWriter, StreamReader, IncompleteReadError
 import ssl
 from .exceptions import BadRequestException
 from .wsgi import (
@@ -183,7 +183,10 @@ class WebSocketParser:
     @asyncio.coroutine
     def get_message(self):
         while True:
-            frame = yield from self.parse_frame(self._reader)
+            try:
+                frame = yield from self.parse_frame(self._reader)
+            except IncompleteReadError:
+                frame = None
             if frame is None:
                 return
             if frame.is_ctrl:

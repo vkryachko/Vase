@@ -339,6 +339,8 @@ class WebSocketParserTests(unittest.TestCase):
 
         self.assertIsNone(self.loop.run_until_complete(task))
 
+        reader._eof = False
+
         frame = FrameBuilder.text(' ' * 67000)[:2]
         self.loop.call_soon(feed_data_and_eof, reader, frame)
 
