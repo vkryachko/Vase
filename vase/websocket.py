@@ -79,7 +79,7 @@ class FrameBuilder:
 
         if original_length >= 2**16:
             length = 127
-        elif original_length >= 125:
+        elif original_length > 125:
             length = 126
 
         if length == 126:
@@ -213,7 +213,7 @@ class WebSocketParser:
 
     @classmethod
     def parse_frame(cls, reader):
-        data = yield from reader.read(2)
+        data = yield from reader.readexactly(2)
         if not data:
             return None
         first_byte, second_byte = struct.unpack('!BB', data)
@@ -247,22 +247,22 @@ class WebSocketParser:
 
 
         if length == 126:
-            data = yield from reader.read(2)
+            data = yield from reader.readexactly(2)
             if not data:
                 return None
             length = struct.unpack_from('!H', data)[0]
         elif length == 127:
-            data = yield from reader.read(8)
+            data = yield from reader.readexactly(8)
             if not data:
                 return None
             length = struct.unpack_from('!Q', data)[0]
 
-        mask = yield from reader.read(4)
+        mask = yield from reader.readexactly(4)
         if not mask:
             return None
 
         if length:
-            payload = yield from reader.read(length)
+            payload = yield from reader.readexactly(length)
             if not payload:
                 return None
         else:
