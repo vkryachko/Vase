@@ -1,10 +1,13 @@
 import asyncio
-import functools
-import collections
-from routes import Mapper
-from .websocket import WebSocketWsgiProtocol
+from .protocol import BaseHttpProtocol
 from .request import HttpRequest
 from .response import HttpResponse
+from .handlers import (
+    CallbackRoute,
+    RoutingProcessor,
+    CallbackRouteHandler,
+    WebSocketHandler
+)
 
 __all__ = ["Vase"]
 
@@ -22,8 +25,7 @@ class CallableDict(dict):
 class Vase:
     def __init__(self, name):
         self._name = name
-        self._routes = Mapper(register=False)
-        self._endpoints = Mapper(register=False)
+        self._routes = []
 
     @asyncio.coroutine
     def __call__(self, environ, start_response):
@@ -66,14 +68,14 @@ class Vase:
 
     def route(self, *, path, methods=('get', 'post')):
         def wrap(func):
-            self._routes.connect(path, **{_HANDLER_ATTR: func})
+            self._routes.append(CallbackRoute(CallbackRouteHandler, "^%s$" % path, self._decorate_callback(func)))
             return func
 
         return wrap
 
     def endpoint(self, *, path):
         def wrap(cls):
-            self._endpoints.connect(path, **{_HANDLER_ATTR: cls, _BAG_ATTR: CallableDict()})
+            self._routes.append(CallbackRoute(WebSocketHandler, "^%s$" % path, cls))
             return cls
 
         return wrap
@@ -81,6 +83,26 @@ class Vase:
     def run(self, *, host='0.0.0.0', port=3000, loop=None):
         if loop is None:
             loop = asyncio.get_event_loop()
-        asyncio.async(loop.create_server(lambda: WebSocketWsgiProtocol(loop=loop, app=self),
+
+        def processor_factory(transport, protocol, reader, writer):
+            return RoutingProcessor(transport, protocol, reader, writer, routes=self._routes)
+
+        asyncio.async(loop.create_server(lambda: BaseHttpProtocol(processor_factory, loop=loop),
                     host, port))
         loop.run_forever()
+
+    @staticmethod
+    def _decorate_callback(callback):
+        @asyncio.coroutine
+        def handle_normal(environ, start_response):
+            request = HttpRequest(environ)
+            yield from request._maybe_init_post()
+
+            data = yield from asyncio.coroutine(callback)(request)
+            if isinstance(data, HttpResponse):
+                response = data
+            else:
+                response = HttpResponse(data)
+
+            return response(environ, start_response)
+        return handle_normal

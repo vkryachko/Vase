@@ -1,8 +1,6 @@
 import unittest
 from vase.http import HttpRequest
-from vase.wsgi import (
-    request_to_wsgi,
-)
+from vase.handlers import request_to_wsgi
 
 
 class WsgiTests(unittest.TestCase):

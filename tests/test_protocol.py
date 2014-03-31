@@ -29,4 +29,4 @@ class BaseHttpProtocolTests(BaseLoopTestCase):
         proto1 = BaseHttpProtocol(keep_alive=0, loop=self.loop)
         self.assertTrue(proto1._should_close_conn_immediately(req))
 
-        
+
