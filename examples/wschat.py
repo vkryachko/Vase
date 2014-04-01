@@ -15,8 +15,8 @@ def hello(request):
 
 @app.endpoint(path="/ws/chat")
 class Endpoint:
-    def authorize_request(self, environ):
-        self.username = environ['QUERY_STRING'];
+    def authorize_request(self, request):
+        self.username = request.ENV['QUERY_STRING'];
         return True
 
     def on_connect(self):

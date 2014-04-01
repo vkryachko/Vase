@@ -8,6 +8,7 @@ from vase.exceptions import BadRequestException
 
 _DEFAULT_KEEP_ALIVE = 20
 
+
 class BaseProcessor:
     def __init__(self, transport, protocol, reader, writer):
         self._transport = transport
@@ -27,13 +28,14 @@ class BaseProcessor:
 
 
 class BaseHttpProtocol(asyncio.StreamReaderProtocol):
-    handler_factory = BaseProcessor
+    processor_factory = BaseProcessor
+
     def __init__(self, handler_factory=None, *, keep_alive=None, loop=None):
         if keep_alive is None:
             keep_alive = _DEFAULT_KEEP_ALIVE
 
         if handler_factory is not None:
-            self.handler_factory = handler_factory
+            self.processor_factory = handler_factory
         self._reader = asyncio.StreamReader(loop=loop)
         self._keep_alive = keep_alive
         super().__init__(self._reader, None, loop)
@@ -109,13 +111,9 @@ class BaseHttpProtocol(asyncio.StreamReaderProtocol):
             self._reset_timeout()
 
     def _build_handler(self):
-        return self.handler_factory(self._transport, self,
+        return self.processor_factory(self._transport, self,
                             self._reader,
-                            self._writer,
-                            **self.get_handler_kwargs())
-
-    def get_handler_kwargs(self):
-        return {}
+                            self._writer)
 
     def _should_close_conn_immediately(self, req):
         if self._keep_alive < 1:

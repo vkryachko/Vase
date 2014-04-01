@@ -11,7 +11,7 @@ _DEFAULT_EXHAUST = 2**16
 DELIMITER = b'\r\n'
 
 
-class HttpRequest(http.client.HTTPMessage):
+class HttpMessage(http.client.HTTPMessage):
     def __init__(self, method, uri, version, extra={}):
         self.method = method
         self.uri = uri
@@ -121,7 +121,7 @@ class HttpParser:
             "sslcontext": sslctx,
         }
 
-        request = HttpRequest(method, uri, version, extra)
+        request = HttpMessage(method, uri, version, extra)
 
         while True:
             l = yield from reader.readline()

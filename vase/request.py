@@ -55,7 +55,6 @@ class HttpRequest:
             self._get = MultiDict(urllib.parse.parse_qs(self.ENV.get('QUERY_STRING'), keep_blank_values=True))
         return self._get
 
-
     @property
     def COOKIES(self):
         if self._cookies is None:
