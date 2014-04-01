@@ -20,7 +20,7 @@ class HttpResponseTests(unittest.TestCase):
         resp._get_headers()
 
         start_response = unittest.mock.Mock()
-        resp(None, start_response)
+        resp(start_response)
 
         start_response.assert_called_with(b'200 OK', [
             (b'Content-Encoding', b'UTF-8'),

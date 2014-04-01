@@ -17,37 +17,6 @@ from hashlib import sha1
 from base64 import b64encode
 
 
-def request_to_wsgi(request):
-    ip, port = request.extra['peername']
-    try:
-        path, query = request.uri.split('?')
-    except ValueError:
-        path, query = request.uri, ''
-
-    headers = {}
-    for name, value in request.items():
-        headers["HTTP_{}".format(name.upper().replace('-', '_'))] = value
-
-    environ = {
-        'REQUEST_METHOD': request.method,
-        'SCRIPT_NAME': '',
-        'PATH_INFO': unquote(path),
-        'QUERY_STRING': unquote(query),
-        'REMOTE_ADDR': ip,
-        'SERVER_PROTOCOL': request.version,
-        'REMOTE_PORT': port,
-        'wsgi.input': request.body,
-        'wsgi.error': sys.stderr,
-        'wsgi.version': (1, 0),
-        'wsgi.multithread': False,
-        'wsgi.multiprocess': False,
-        'wsgi.run_once': False,
-        'wsgi.url_scheme': 'http' if request.extra.get('sslcontext') is None else 'https',
-    }
-    environ.update(headers)
-    return environ
-
-
 class RoutingProcessor(BaseProcessor):
     def __init__(self, transport, protocol, reader, writer, *, routes=[]):
         self._routes = routes
@@ -56,8 +25,7 @@ class RoutingProcessor(BaseProcessor):
 
     @asyncio.coroutine
     def handle_request(self, request):
-        environ = request_to_wsgi(request)
-        request = HttpRequest(environ)
+        request = HttpRequest(request)
         current_route = None
         matchdict = {}
         for route in self._routes:
@@ -138,7 +106,7 @@ class CallbackRouteHandler(RequestHandler):
             def write(data):
                 self._writer.write(data)
             return write
-        result = yield from self._callback(self._request.ENV, start_response, **kwargs)
+        result = yield from self._callback(self._request, start_response, **kwargs)
         self._writer.writelines(result)
 
 
@@ -182,7 +150,7 @@ class WebSocketHandler(RequestHandler):
                 self._writer.write_body(b'')
                 return
 
-        key = self._request.ENV['HTTP_SEC_WEBSOCKET_KEY']
+        key = self._request.get('sec-websocket-key', '')
 
         accept = sha1(key.encode('ascii') + MAGIC).digest()
         self._writer.write_status(b'101 Switching Protocols')

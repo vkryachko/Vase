@@ -38,11 +38,18 @@ class MultiDict(dict):
 
 
 class HttpRequest:
-    def __init__(self, environ):
-        self.ENV = environ
-        self.method = environ["REQUEST_METHOD"].upper()
-        self.path = environ['PATH_INFO']
-        self.path_info = environ['PATH_INFO']
+    def __init__(self, http_message):
+        self._http_message = http_message
+        self.method = http_message.method.upper()
+        ip, port = http_message.extra['peername']
+        try:
+            path, query = http_message.uri.split('?')
+        except ValueError:
+            path, query = http_message.uri, ''
+
+        self.path = path
+        self.path_info = path
+        self.querystring = query
 
         self.POST = MultiDict()
         self._cookies = None
@@ -50,16 +57,20 @@ class HttpRequest:
         self._get = None
 
     @property
+    def body(self):
+        return self._http_message.body
+
+    @property
     def GET(self):
         if self._get is None:
-            self._get = MultiDict(urllib.parse.parse_qs(self.ENV.get('QUERY_STRING'), keep_blank_values=True))
+            self._get = MultiDict(urllib.parse.parse_qs(self.querystring, keep_blank_values=True))
         return self._get
 
     @property
     def COOKIES(self):
         if self._cookies is None:
             try:
-                c = SimpleCookie(self.ENV.get('HTTP_COOKIE', ''))
+                c = SimpleCookie(self._http_message.get('cookie', ''))
             except CookieError:  # pragma: no cover
                 self._cookies = {}
             else:
@@ -69,15 +80,21 @@ class HttpRequest:
                 self._cookies = res
         return self._cookies
 
+    def is_secure(self):
+        return self._http_message.extra.get('sslcontext') is None
+
+    def get(self, key, default=None):
+        return self._http_message.get(key, default)
+
     def _has_form(self):
-        return self.ENV.get('HTTP_CONTENT_TYPE', '') == _FORM_URLENCODED
+        return self._http_message.get('content-type', '').lower() == _FORM_URLENCODED
 
     @asyncio.coroutine
     def _maybe_init_post(self):
         if self._post_inited:
             return
         if self._has_form():
-            body = yield from self.ENV['wsgi.input'].read()
+            body = yield from self._http_message.body.read()
             self.POST = MultiDict(urllib.parse.parse_qs(body.decode('utf-8')))
         self._post_inited = True
 

@@ -29,19 +29,8 @@ class Vase:
         self._name = name
         self._routes = []
 
-    def initialize_endpoint(self, environ):
-        match = self._endpoints.match(environ=environ)
-        if match is None:
-            return None
-        handler = match.pop(_HANDLER_ATTR)
-        bag = match.pop(_BAG_ATTR)
-        instance = handler()
-        instance.bag = bag
-
-        return instance
-
     @asyncio.coroutine
-    def _handle_404(self, environ, start_response):
+    def _handle_404(self, request, start_response):
         data = 'Not found'.encode('utf-8')
         headers = (
             (b'Content-Type', b'text/plain'),
@@ -79,8 +68,7 @@ class Vase:
     @staticmethod
     def _decorate_callback(callback):
         @asyncio.coroutine
-        def handle_normal(environ, start_response, **kwargs):
-            request = HttpRequest(environ)
+        def handle_normal(request, start_response, **kwargs):
             yield from request._maybe_init_post()
 
             data = yield from asyncio.coroutine(callback)(request, **kwargs)
@@ -89,5 +77,5 @@ class Vase:
             else:
                 response = HttpResponse(data)
 
-            return response(environ, start_response)
+            return response(start_response)
         return handle_normal

@@ -24,7 +24,7 @@ class HttpResponse:
         ]
         self._content_type = content_type
 
-    def __call__(self, environ, start_response):
+    def __call__(self, start_response):
         status = status_line(self._status)
         start_response(status, self._get_headers())
         return [self._body]

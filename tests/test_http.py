@@ -4,7 +4,6 @@ import unittest.mock
 from vase.http import (
     HttpParser,
     HttpWriter,
-    WsgiParser,
     BadRequestException,
 )
 import asyncio
@@ -192,69 +191,3 @@ class HttpWriterTests(unittest.TestCase):
         writer.writelines((b'Hello',))
         self.assertTrue(writer._headers_sent)
         mtransport.writelines.assert_called_with((b'Hello',))
-
-
-class WsgiParserTests(unittest.TestCase):
-    def setUp(self):
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(None)
-
-    def tearDown(self):
-        asyncio.test_utils.run_briefly(self.loop)
-
-        self.loop.close()
-        gc.collect()
-
-    def test_eof(self):
-        stream = asyncio.StreamReader(loop=self.loop)
-        task = asyncio.Task(WsgiParser.parse(stream), loop=self.loop)
-        self.loop.call_soon(lambda: stream.feed_eof())
-        environ = self.loop.run_until_complete(task)
-        self.assertIs(environ, None)
-
-    def test_parse_bad_version(self):
-        stream = asyncio.StreamReader(loop=self.loop)
-        task = asyncio.Task(WsgiParser.parse(stream), loop=self.loop)
-        self.loop.call_soon(lambda: stream.feed_data(b'GET / HTTP/2.3\r\n'))
-        self.assertRaises(BadRequestException, self.loop.run_until_complete, task)
-
-    def test_parse_no_query(self):
-        stream = asyncio.StreamReader(loop=self.loop)
-        transport = unittest.mock.Mock()
-        transport.get_extra_info.return_value = ('127.0.0.1', 1)
-        stream.set_transport(transport)
-        task = asyncio.Task(WsgiParser.parse(stream), loop=self.loop)
-        self.loop.call_soon(lambda: stream.feed_data(b'GET / HTTP/1.1\r\nContent-Length: 3\r\n\r\nfoo'))
-        env =self.loop.run_until_complete(task)
-        self.assertEqual(env['QUERY_STRING'], '')
-
-    def test_parse_with_query(self):
-        stream = asyncio.StreamReader(loop=self.loop)
-        transport = unittest.mock.Mock()
-        transport.get_extra_info.return_value = ('127.0.0.1', 1)
-        stream.set_transport(transport)
-        task = asyncio.Task(WsgiParser.parse(stream), loop=self.loop)
-        self.loop.call_soon(lambda: stream.feed_data(b'GET /?foo=bar HTTP/1.1\r\nContent-Length: 3\r\n\r\nfoo'))
-        env =self.loop.run_until_complete(task)
-        self.assertEqual(env['QUERY_STRING'], 'foo=bar')
-        self.assertEqual(env['HTTP_CONTENT_LENGTH'], '3')
-
-    def test_parse_invalid_header(self):
-        stream = asyncio.StreamReader(loop=self.loop)
-        transport = unittest.mock.Mock()
-        transport.get_extra_info.return_value = ('127.0.0.1', 1)
-        stream.set_transport(transport)
-        task = asyncio.Task(WsgiParser.parse(stream), loop=self.loop)
-        self.loop.call_soon(lambda: stream.feed_data(b'GET /?foo=bar HTTP/1.1\r\nContent-Length 3\r\n\r\nfoo'))
-        self.assertRaises(BadRequestException, self.loop.run_until_complete, task)
-
-    def test_parse_multiple_same_name_headers(self):
-        stream = asyncio.StreamReader(loop=self.loop)
-        transport = unittest.mock.Mock()
-        transport.get_extra_info.return_value = ('127.0.0.1', 1)
-        stream.set_transport(transport)
-        task = asyncio.Task(WsgiParser.parse(stream), loop=self.loop)
-        self.loop.call_soon(lambda: stream.feed_data(b'GET /?foo=bar HTTP/1.1\r\nContent-Type: foo\r\nContent-Type: bar\r\nCookie: foo\r\nCookie: bar\r\nContent-Length: boo\r\n\r\n'))
-        env = self.loop.run_until_complete(task)
-        self.assertEqual(env['HTTP_CONTENT_TYPE'], 'foo,bar')
-        self.assertEqual(env['HTTP_COOKIE'], 'foo;bar')
