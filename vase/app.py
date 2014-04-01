@@ -1,12 +1,13 @@
 import asyncio
 from .protocol import BaseHttpProtocol
-from .request import HttpRequest
 from .response import HttpResponse
 from .handlers import (
-    CallbackRoute,
-    RoutingProcessor,
     CallbackRouteHandler,
     WebSocketHandler,
+)
+from .routing import (
+    CallbackRoute,
+    RoutingHttpProcessor,
     ContextHandlingCallbackRoute,
 )
 from .routing import RequestSpec
@@ -60,7 +61,7 @@ class Vase:
             loop = asyncio.get_event_loop()
 
         def processor_factory(transport, protocol, reader, writer):
-            return RoutingProcessor(transport, protocol, reader, writer, routes=self._routes)
+            return RoutingHttpProcessor(transport, protocol, reader, writer, routes=self._routes)
         asyncio.async(loop.create_server(lambda: BaseHttpProtocol(processor_factory, loop=loop),
                     host, port))
         loop.run_forever()

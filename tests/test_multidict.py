@@ -1,5 +1,5 @@
 import unittest
-from vase.request import MultiDict
+from vase.util import MultiDict
 
 
 class MultiDictTests(unittest.TestCase):

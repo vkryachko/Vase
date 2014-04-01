@@ -1,24 +1,43 @@
 import asyncio
 from asyncio.streams import StreamWriter
-from urllib.parse import unquote
-import sys
+from http.cookies import (
+    CookieError,
+    SimpleCookie
+)
+import http.client
+import urllib.parse
 
 from .stream import LimitedReader
 from .exceptions import BadRequestException
-import http.client
+from .util import MultiDict
+
 
 _DEFAULT_EXHAUST = 2**16
 DELIMITER = b'\r\n'
 
+_FORM_URLENCODED = 'application/x-www-form-urlencoded'
 
-class HttpMessage(http.client.HTTPMessage):
+
+class HttpRequest(http.client.HTTPMessage):
     def __init__(self, method, uri, version, extra={}):
-        self.method = method
-        self.uri = uri
+        self.method = method.upper()
+        try:
+            path, query = uri.split('?')
+        except ValueError:
+            path, query = uri, ''
+        ip, port = extra.get('peername', ('', ''))
+        self.path = path
+        self.path_info = path
+        self.querystring = query
         self.version = version
+
         self._content_length = 0
         self._body = LimitedReader(None, 0)
+        self.POST = MultiDict()
+        self._get = None
+        self._cookies = None
         self.extra = extra
+        self._post_inited = False
         super().__init__()
 
     def add_header(self, name, value, **params):
@@ -32,21 +51,57 @@ class HttpMessage(http.client.HTTPMessage):
     @property
     def body(self):
         return self._body
+
     @body.setter
     def body(self, value):
         self._body = LimitedReader(value, self._content_length)
-    
+
+    @property
+    def GET(self):
+        if self._get is None:
+            self._get = MultiDict(urllib.parse.parse_qs(self.querystring, keep_blank_values=True))
+        return self._get
+
+    @property
+    def COOKIES(self):
+        if self._cookies is None:
+            try:
+                c = SimpleCookie(self.get('cookie', ''))
+            except CookieError:  # pragma: no cover
+                self._cookies = {}
+            else:
+                res = {}
+                for name, value in c.items():
+                    res[name] = value.value
+                self._cookies = res
+        return self._cookies
 
     def as_string(self):  # pragma: no cover
         return "{} {} {}\r\n{}".format(self.method,
-                self.uri,
-                self.version,
-                super().as_string())
+                                       self.uri,
+                                       self.version,
+                                       super().as_string()
+        )
+
+    def is_secure(self):
+        return self.extra.get('sslcontext') is not None
 
     def append_to_last_header(self, value):
         assert self._headers
         name, v = self._headers.pop(-1)
         self._headers.append((name, v + ' ' + value))
+
+    def _has_form(self):
+        return self.get('content-type', '').lower() == _FORM_URLENCODED
+
+    @asyncio.coroutine
+    def _maybe_init_post(self):
+        if self._post_inited:
+            return
+        if self._has_form():
+            body = yield from self.body.read()
+            self.POST = MultiDict(urllib.parse.parse_qs(body.decode('utf-8')))
+        self._post_inited = True
 
 
 class HttpWriter(StreamWriter):
@@ -121,7 +176,7 @@ class HttpParser:
             "sslcontext": sslctx,
         }
 
-        request = HttpMessage(method, uri, version, extra)
+        request = HttpRequest(method, uri, version, extra)
 
         while True:
             l = yield from reader.readline()

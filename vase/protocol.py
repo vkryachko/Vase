@@ -10,6 +10,7 @@ _DEFAULT_KEEP_ALIVE = 20
 
 
 class BaseProcessor:
+    """Base class responsible for processing http requests"""
     def __init__(self, transport, protocol, reader, writer):
         self._transport = transport
         self._protocol = protocol

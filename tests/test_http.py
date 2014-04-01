@@ -1,12 +1,83 @@
 import gc
 import unittest
 import unittest.mock
+import asyncio
+
 from vase.http import (
+    HttpRequest,
     HttpParser,
     HttpWriter,
     BadRequestException,
+    _FORM_URLENCODED,
 )
-import asyncio
+from vase.util import MultiDict
+
+
+class RequestTests(unittest.TestCase):
+    def _get_request(self):
+        request = HttpRequest(
+            method="GET",
+            uri="/hello?foo=bar&baz",
+            version="1.1",
+            extra={'peername': ('127.0.0.1', '80')}
+        )
+        request.add_header("Cookie", "foo=bar;baz=far")
+        request.add_header('content-type', _FORM_URLENCODED)
+        return request
+
+    def test_request(self):
+        req = self._get_request()
+        self.assertEqual(req.GET, MultiDict(foo=['bar'], baz=['']))
+        self.assertEqual(req.GET, MultiDict(foo=['bar'], baz=['']))
+
+    def test_has_form(self):
+        req = self._get_request()
+        self.assertTrue(req._has_form())
+
+        req.replace_header('content-type', 'application/json')
+        self.assertFalse(req._has_form())
+
+    def test_cookies(self):
+        req = self._get_request()
+        self.assertEqual(req.COOKIES, {'foo': 'bar', 'baz': 'far'})
+        self.assertEqual(req.COOKIES, {'foo': 'bar', 'baz': 'far'})
+
+    def test_maybe_init_post(self):
+        req = self._get_request()
+        loop = asyncio.new_event_loop()
+        stream = asyncio.StreamReader(loop=loop)
+        data = b'foo=bar&baz=far'
+        req.add_header('content-length', str(len(data)))
+        req.body = stream
+
+        task = asyncio.Task(req._maybe_init_post(), loop=loop)
+        def feed():
+            stream.feed_data(b'foo=bar&baz=far')
+            stream.feed_eof()
+        loop.call_soon(feed)
+
+        loop.run_until_complete(task)
+        self.assertEqual(req.POST, MultiDict(foo=['bar'], baz=['far']))
+
+        req = self._get_request()
+        stream._eof = False
+        task = asyncio.Task(req._maybe_init_post(), loop=loop)
+        def feed():
+            stream.feed_data(b'foo=bar&baz=far')
+            stream.feed_eof()
+        loop.call_soon(feed)
+
+        loop.run_until_complete(task)
+
+        req.replace_header('content-type', 'application/json')
+        req.body = stream
+        stream._eof = False
+        task = asyncio.Task(req._maybe_init_post(), loop=loop)
+        loop.call_soon(feed)
+
+        loop.run_until_complete(task)
+        self.assertEqual(req.POST, MultiDict())
+
 
 
 class HttpParserTests(unittest.TestCase):
@@ -57,7 +128,7 @@ class HttpParserTests(unittest.TestCase):
         result = self.loop.run_until_complete(task)
 
         self.assertEqual(result.method, 'GET')
-        self.assertEqual(result.uri, '/')
+        self.assertEqual(result.path, '/')
         self.assertEqual(result.version, 'HTTP/1.1')
         self.assertEqual(result.get('Hello'), 'world')
 
