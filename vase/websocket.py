@@ -25,7 +25,6 @@ class FrameBuilder:
 
         return b''.join([first_byte, length_bytes, mask, payload])
 
-
     @classmethod
     def continuation(cls, payload, *, fin=True, masked=True):
         return cls.build(opcode=OpCode.continuation, fin=fin, payload=payload, masked=masked)
@@ -58,9 +57,9 @@ class FrameBuilder:
 
     @staticmethod
     def _build_first_byte(fin, opcode):
-        first_byte = (1<<7) | opcode.value
+        first_byte = (1 << 7) | opcode.value
         if not fin:
-            first_byte = first_byte & 0x7f
+            first_byte &= 0x7f
         return struct.pack("!B", first_byte)
 
     @staticmethod
@@ -113,6 +112,7 @@ class Frame:
     WebSocket frame
     """
     __slots__ = ('fin', 'opcode', 'payload')
+
     def __init__(self, fin, opcode, payload):
         self.fin = fin
         self.opcode = opcode
@@ -131,6 +131,7 @@ class Frame:
 
 class Message:
     __slots__ = ('opcode', 'payload', 'ext_data')
+
     def __init__(self, opcode, payload=b'', ext_data=b''):
         self.opcode = opcode
         self.payload = payload
@@ -151,7 +152,6 @@ class Message:
         if code is not None:
             payload = b''.join((struct.pack("!H", code), payload))
         return cls(OpCode.close, payload)
-
 
 
 class WebSocketFormatException(Exception):
@@ -242,7 +242,6 @@ class WebSocketParser:
 
         if not has_mask:
             raise WebSocketFormatException("Clients MUST mask their frames")
-
 
         if length == 126:
             data = yield from reader.readexactly(2)
