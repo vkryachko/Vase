@@ -36,10 +36,12 @@ class CallbackRouteHandler(RequestHandler):
     def handle(self, **kwargs):
         def start_response(status, headers):
             self._writer.write_status(status)
-            self._writer.write_headers(headers)
+            self._writer.write_headers(*headers)
+
             def write(data):
                 self._writer.write(data)
             return write
+
         result = yield from self._callback(self._request, start_response, **kwargs)
         self._writer.writelines(result)
 
@@ -53,7 +55,7 @@ class WebSocketHandler(RequestHandler):
         self._endpoint = None
         self._context = context
 
-    def handle(self):
+    def handle(self, **kwargs):
         self._endpoint = self._endpoint_factory()
         self._endpoint.bag = self._context
 
@@ -66,14 +68,21 @@ class WebSocketHandler(RequestHandler):
                 return
 
         key = self._request.get('sec-websocket-key', '')
+        if not key:
+            self._writer.write_status(b'400 Bad Request')
+            self._writer.write_headers(
+                (b'Content-Length', b'0',),
+            )
+            self._writer.write_body(b'')
+            return
 
         accept = sha1(key.encode('ascii') + MAGIC).digest()
         self._writer.write_status(b'101 Switching Protocols')
-        self._writer.write_headers((
+        self._writer.write_headers(
             (b'Upgrade', b'websocket',),
             (b'Connection', b'Upgrade'),
             (b'Sec-WebSocket-Accept', b64encode(accept))
-        ))
+        )
         self._writer.write_body(b'')
 
         yield from self._switch_protocol()

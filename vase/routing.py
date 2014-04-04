@@ -4,7 +4,9 @@ from .protocol import BaseProcessor
 
 
 class RoutingHttpProcessor(BaseProcessor):
-    def __init__(self, transport, protocol, reader, writer, *, routes=[]):
+    def __init__(self, transport, protocol, reader, writer, *, routes=None):
+        if not routes:
+            routes = []
         self._routes = routes
         self._handler = None
         super().__init__(transport, protocol, reader, writer)
@@ -39,7 +41,7 @@ class RequestSpec:
     def __init__(self, pattern, methods="*"):
         self.pattern = pattern
         if isinstance(methods, str):
-            method = (methods, )
+            methods = (methods, )
         self.methods = tuple(m.lower() for m in methods)
 
     def __str__(self):
@@ -55,7 +57,8 @@ _R = re.compile("{((\w+:)?[^{}]+)}")
 
 def _regex_substituter(m):
     name = m.groups()[0]
-    if ":" not in name: name = "%s:[^/]+" % name
+    if ":" not in name:
+        name = "%s:[^/]+" % name
     n, t = name.split(":")
     return "(?P<%s>%s)" % (n, t)
 
@@ -82,6 +85,7 @@ class PatternRequestMatcher(RequestMatcher):
             if request.method.lower() not in self._spec.methods:
                 return None
 
+
         match = self._regex.match(request.path)
         if match is None:
             return None
@@ -96,28 +100,19 @@ class Route:
         raise NotImplementedError
 
 
-class RegExpMatcher:
-    def __init__(self, spec):
-
-        self._pattern = PatternRequestMatcher(spec)
-
-    def matches(self, value):
-        return self._pattern.match(value)
-
-
 class UrlRoute(Route):
-    matcher_class = RegExpMatcher
+    matcher_class = PatternRequestMatcher
 
-    def __init__(self, pattern):
-        self._matcher = self.matcher_class(pattern)
+    def __init__(self, spec):
+        self._matcher = self.matcher_class(spec)
 
     def matches(self, request):
-        return self._matcher.matches(request)
+        return self._matcher.match(request)
 
 
 class CallbackRoute(UrlRoute):
-    def __init__(self, handler_factory, pattern, callback):
-        super().__init__(pattern)
+    def __init__(self, handler_factory, spec, callback):
+        super().__init__(spec)
         self._handler_factory = handler_factory
         self._callback = callback
 
@@ -126,8 +121,8 @@ class CallbackRoute(UrlRoute):
 
 
 class ContextHandlingCallbackRoute(CallbackRoute):
-    def __init__(self, handler_factory, pattern, callback):
-        super().__init__(handler_factory, pattern, callback)
+    def __init__(self, handler_factory, spec, callback):
+        super().__init__(handler_factory, spec, callback)
         self._context_map = {}
 
     def handler_factory(self, request, reader, writer):

@@ -4,6 +4,7 @@ from http.cookies import (
     CookieError,
     SimpleCookie
 )
+from http.server import BaseHTTPRequestHandler
 import http.client
 import urllib.parse
 
@@ -16,6 +17,8 @@ _DEFAULT_EXHAUST = 2**16
 DELIMITER = b'\r\n'
 
 _FORM_URLENCODED = 'application/x-www-form-urlencoded'
+
+RESPONSES = {x: "{} {}".format(x, y[0]) for x, y in BaseHTTPRequestHandler.responses.items()}
 
 
 class HttpRequest(http.client.HTTPMessage):
@@ -78,7 +81,7 @@ class HttpRequest(http.client.HTTPMessage):
 
     def as_string(self):  # pragma: no cover
         return "{} {} {}\r\n{}".format(self.method,
-                                       self.uri,
+                                       self.path,
                                        self.version,
                                        super().as_string()
         )
@@ -114,6 +117,12 @@ class HttpWriter(StreamWriter):
         self._status = b''
     
     def write_status(self, status, version=b'1.1'):
+        if isinstance(status, int):
+            status = RESPONSES.get(status)
+        if isinstance(status, str):
+            status = status.encode('ascii')
+        if isinstance(version, str):
+            version = version.encode('ascii')
         assert not self._headers_sent, "Headers have already been sent"
         self._status = b'HTTP/' + version + b' ' + status + self.delimiter
 
@@ -121,7 +130,9 @@ class HttpWriter(StreamWriter):
         assert not self._headers_sent, "Headers have already been sent"
         self._headers.append((name, value))
 
-    def write_headers(self, headers):
+    def write_headers(self, *headers):
+        if len(headers) == 1:
+            headers = headers[0]
         for name, value in headers:
             self.write_header(name, value)
 
@@ -130,6 +141,10 @@ class HttpWriter(StreamWriter):
             _to_send = self._status
             have_headers = False
             for name, value in self._headers:
+                if isinstance(name, str):
+                    name = name.encode('utf-8')
+                if isinstance(value, str):
+                    value = value.encode('utf-8')
                 _to_send += name + b': ' + value + self.delimiter
                 have_headers = True
             _to_send += self.delimiter
@@ -138,6 +153,8 @@ class HttpWriter(StreamWriter):
 
     def write_body(self, data):
         self._maybe_send_headers()
+        if isinstance(data, str):
+            data = data.encode('utf-8')
         self.write(data)
 
     def writelines(self, data):

@@ -90,7 +90,8 @@ class BaseHttpProtocol(asyncio.StreamReaderProtocol):
                 yield from self._handler.handle_request(req)
             finally:
                 if self._should_close_conn_immediately(req):
-                    self._writer.close()
+                    if self._writer:
+                        self._writer.close()
                 else:
                     yield from req.body.read()
                     if self._writer is not None:
