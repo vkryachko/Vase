@@ -176,10 +176,11 @@ class WebSocketParser:
         while True:
             try:
                 frame = yield from self.parse_frame(self._reader)
-            except (IncompleteReadError, WebSocketFormatException):
+            except IncompleteReadError:
                 frame = None
             if frame is None:
                 return
+
             if frame.is_ctrl:
                 return Message(frame.opcode, frame.payload, '')
 

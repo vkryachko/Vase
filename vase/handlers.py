@@ -1,4 +1,5 @@
 import asyncio
+from vase.websocket import WebSocketFormatException
 from .websocket import (
     WebSocketWriter,
     MAGIC,
@@ -96,7 +97,11 @@ class WebSocketHandler(RequestHandler):
     def _parse_messages(self):
         parser = WebSocketParser(self._reader)
         while True:
-            msg = yield from parser.get_message()
+            try:
+                msg = yield from parser.get_message()
+            except WebSocketFormatException:
+                self._writer.close()
+                return
             if msg is None:
                 self._writer.close()
                 return
