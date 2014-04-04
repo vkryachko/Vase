@@ -1,6 +1,7 @@
 import asyncio
 import re
 from .protocol import BaseProcessor
+from vase.handlers import WebSocketHandler
 
 
 class RoutingHttpProcessor(BaseProcessor):
@@ -127,3 +128,8 @@ class ContextHandlingCallbackRoute(CallbackRoute):
 
     def handler_factory(self, request, reader, writer):
         return self._handler_factory(request, reader, writer, self._callback, self._context_map)
+
+
+class WebSocketRoute(ContextHandlingCallbackRoute):
+    def __init__(self, spec, callback):
+        super().__init__(WebSocketHandler, spec, callback)

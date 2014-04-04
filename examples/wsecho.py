@@ -9,7 +9,7 @@ def hello(request):
     return "Hello Vase!"
 
 
-@app.endpoint(path="/ws/echo")
+@app.endpoint(path="/ws/echo", with_sockjs=False)
 class EchoEndpoint:
     """
     WebSocket endpoint
@@ -18,7 +18,7 @@ class EchoEndpoint:
     `transport` - used to send messages into the websocket
     """
     def on_connect(self):
-        self.transport.send("You are successfully connected")
+        print("You are successfully connected")
 
     def on_message(self, message):
         self.transport.send(message)

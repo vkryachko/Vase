@@ -8,7 +8,7 @@ from .handlers import (
 from .routing import (
     CallbackRoute,
     RoutingHttpProcessor,
-    ContextHandlingCallbackRoute,
+    WebSocketRoute,
 )
 from .sockjs import SockJsRoute
 from .routing import RequestSpec
@@ -27,10 +27,9 @@ class CallableDict(dict):
 
 
 class Vase:
-    def __init__(self, name, *, with_sockjs=True):
+    def __init__(self, name):
         self._name = name
         self._routes = []
-        self._with_sockjs = with_sockjs
 
     @asyncio.coroutine
     def _handle_404(self, request, start_response):
@@ -50,10 +49,14 @@ class Vase:
 
         return wrap
 
-    def endpoint(self, *, path):
+    def endpoint(self, *, path, with_sockjs=True):
         spec = RequestSpec(path)
+
         def wrap(cls):
-            self._routes.append(SockJsRoute(spec, cls))
+            if with_sockjs:
+                self._routes.append(SockJsRoute(spec, cls))
+            else:
+                self._routes.append(WebSocketRoute(spec, cls))
             return cls
 
         return wrap
