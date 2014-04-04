@@ -1,5 +1,6 @@
 import gc
 import asyncio
+import asyncio.test_utils
 import unittest
 
 

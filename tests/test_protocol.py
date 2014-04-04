@@ -4,7 +4,6 @@ from vase.http import (
 )
 from vase.protocol import BaseHttpProtocol
 
-
 class BaseHttpProtocolTests(BaseLoopTestCase):
     def test_should_close_conn(self):
         proto = BaseHttpProtocol(loop=self.loop)

@@ -2,6 +2,7 @@ import gc
 import unittest
 import unittest.mock
 import asyncio
+import asyncio.test_utils
 
 from vase.http import (
     HttpRequest,
