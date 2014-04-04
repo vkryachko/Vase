@@ -98,6 +98,7 @@ class WebSocketHandler(RequestHandler):
         while True:
             msg = yield from parser.get_message()
             if msg is None:
+                self._writer.close()
                 return
             if msg.is_ctrl:
                 if msg.opcode == OpCode.close:
@@ -106,7 +107,7 @@ class WebSocketHandler(RequestHandler):
                     self._writer.close()
                     return
                 elif msg.opcode == OpCode.ping:
-                    self._writer.write(FrameBuilder.pong(masked=False))
+                    self._writer.write(FrameBuilder.pong(masked=False, payload=msg.payload))
             else:
                 self._endpoint.on_message(msg.payload)
 
@@ -115,6 +116,8 @@ class WebSocketHandler(RequestHandler):
 
     def connection_lost(self, exc):
         self._endpoint.on_close(exc)
+        if self._writer:
+            self._writer.close()
 
     def on_timeout(self):
         self._writer.write(FrameBuilder.ping(masked=False))

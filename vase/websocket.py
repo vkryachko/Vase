@@ -176,7 +176,7 @@ class WebSocketParser:
         while True:
             try:
                 frame = yield from self.parse_frame(self._reader)
-            except IncompleteReadError:
+            except (IncompleteReadError, WebSocketFormatException):
                 frame = None
             if frame is None:
                 return
@@ -202,7 +202,10 @@ class WebSocketParser:
             buf.append(frame.payload)
         payload = b''.join(buf)
         if opcode == OpCode.text:
-            payload = payload.decode('utf-8')
+            try:
+                payload = payload.decode('utf-8')
+            except UnicodeDecodeError:
+                return None
         return Message(opcode, payload, b'')
 
     @classmethod
