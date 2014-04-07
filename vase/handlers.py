@@ -114,7 +114,7 @@ class WebSocketHandler(RequestHandler):
                 elif msg.opcode == OpCode.ping:
                     self._writer.write(FrameBuilder.pong(masked=False, payload=msg.payload))
             else:
-                self._endpoint.on_message(msg.payload)
+                yield from asyncio.coroutine(self._endpoint.on_message)(msg.payload)
 
     def persistent_connection(self):
         return True
