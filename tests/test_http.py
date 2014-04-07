@@ -202,7 +202,7 @@ class HttpWriterTests(unittest.TestCase):
     def test_write_status(self, write_method):
         writer = HttpWriter(None, None, None, None)
 
-        writer.write_status(b'200 OK')
+        writer.status = 200
         self.assertFalse(writer._headers_sent)
         writer.flush()
         self.assertTrue(writer._headers_sent)
@@ -211,23 +211,23 @@ class HttpWriterTests(unittest.TestCase):
     def test_write_header_raises_when_headers_sent(self):
         writer = HttpWriter(None, None, None, None)
         writer._headers_sent = True
-        self.assertRaises(AssertionError, writer.write_header, b'foo', b'bar')
+        self.assertRaises(AssertionError, writer.__setitem__, 'foo', 'bar')
 
     @unittest.mock.patch.object(HttpWriter, 'write')
     def test_write_header(self, write_method):
         writer = HttpWriter(None, None, None, None)
-        writer.write_status(b'200 OK')
-        writer.write_header(b'foo', b'bar')
+        writer.status = 200
+        writer['foo'] = 'bar'
         writer.flush()
 
         write_method.assert_called_with(b'HTTP/1.1 200 OK\r\nfoo: bar\r\n\r\n')
 
-    @unittest.mock.patch.object(HttpWriter, 'write_header')
+    @unittest.mock.patch.object(HttpWriter, '__setitem__')
     def test_write_headers(self, write_header_method):
         writer = HttpWriter(None, None, None, None)
 
-        writer.write_headers(((b'foo', b'bar'),))
-        write_header_method.assert_called_with(b'foo', b'bar')
+        writer.add_headers(('foo', 'bar'))
+        write_header_method.assert_called_with('foo', 'bar')
 
     def test_status_written(self):
         writer = HttpWriter(None, None, None, None)
@@ -243,7 +243,7 @@ class HttpWriterTests(unittest.TestCase):
     def test_maybe_finalize_headers(self, write_method):
         writer = HttpWriter(None, None, None, None)
         writer._maybe_send_headers()
-        write_method.assert_called_with(b'\r\n')
+        write_method.assert_called_with(b'HTTP/1.1 200 OK\r\n\r\n')
 
         writer = HttpWriter(None, None, None, None)
         writer._headers_sent = True

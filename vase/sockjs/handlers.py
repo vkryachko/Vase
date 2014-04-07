@@ -30,13 +30,13 @@ class Handler(object):
         if origin == 'null':
             origin = '*'
         origin = origin
-        writer.write_status(200)
+        writer.status = 200
 
         if not message.endswith('\n'):
             message += '\n'
 
         msg = message.encode('utf-8')
-        writer.write_headers(
+        writer.add_headers(
             ('Content-Type', 'application/javascript;charset=UTF-8'),
             ('Content-Length', str(len(msg))),
             ('Access-Control-Allow-Origin', origin),
@@ -51,11 +51,11 @@ class Handler(object):
         if origin == 'null':
             origin = '*'
         origin = origin.encode('utf-8')
-        writer.write_status(204)
+        writer.status = 204
         date = datetime.utcnow() + timedelta(milliseconds=31536000)
 
         methods = 'OPTIONS, {}'.format(', '.join(cls.allowed_methods))
-        writer.write_headers((
+        writer.add_headers(
             ('Content-Type', 'application/json;charset=UTF-8'),
             ('Cache-Control', 'public, max-age=31536000'),
             ('Expires', email.utils.format_datetime(date)),
@@ -65,28 +65,26 @@ class Handler(object):
             ('Access-Control-Allow-Methods', methods),
             ('Access-Control-Max-Age', '31536000'),
 
-        ))
+        )
         writer.write_body('')
 
     def not_allowed(self, writer, allowed_methods):
-        writer.write_status(405)
-        writer.write_headers(
-            ('Allow', ','.join(allowed_methods)),
-        )
+        writer.status = 405
+        writer['Allow'] = ','.join(allowed_methods)
+
         writer.write_body('')
         writer.close()
 
     def not_modified(self, writer):
-        writer.write_status(304)
+        writer.status = 304
         writer.write_body('')
         writer.close()
 
     def send_500(self, reason, writer):
         msg = reason.encode('utf-8')
-        writer.write_status(500)
-        writer.write_headers((
-            ('Content-Length', str(len(msg))),
-        ))
+        writer.status = 500
+        writer['Content-Length'] = str(len(msg))
+
         writer.write_body(msg)
         writer.close()
 
@@ -110,8 +108,8 @@ class InfoHandler(Handler):
                 'entropy': random.SystemRandom().randint(1, sys.maxsize)
             }
             content = json.dumps(data).encode('utf-8')
-            writer.write_status(200)
-            writer.write_headers(
+            writer.status = 200
+            writer.add_headers(
                 ('Content-Type', 'application/json;charset=UTF-8'),
                 ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0'),
                 ('Content-Length', str(len(content))),
@@ -120,11 +118,11 @@ class InfoHandler(Handler):
             )
             writer.write_body(content)
         elif request.method == 'OPTIONS':
-            writer.write_status(204)
+            writer.status = 204
             date = datetime.utcnow() + timedelta(milliseconds=31536000)
 
             methods = 'OPTIONS, {}'.format(', '.join(self.allowed_methods)).encode('utf-8')
-            writer.write_headers(
+            writer.add_headers(
                 ('Content-Type', 'application/json;charset=UTF-8'),
                 ('Cache-Control', 'public, max-age=31536000'),
                 ('Expires', email.utils.format_datetime(date)),
@@ -171,8 +169,8 @@ class IFrameHandler(Handler):
 
         date = datetime.utcnow() + timedelta(milliseconds=31536000)
 
-        writer.write_status(200)
-        writer.write_headers(
+        writer.status = 200
+        writer.add_headers(
             ('Content-Type', 'text/html;charset=UTF-8'),
             ('Cache-Control', 'public, max-age=31536000'),
             ('ETag', etag),
@@ -232,8 +230,8 @@ class XhrTransportHandler(Handler):
         origin = request.get('origin', 'null')
         if origin == 'null':
             origin = '*'
-        writer.write_status(200)
-        writer.write_headers(
+        writer.status = 200
+        writer.add_headers(
             ('Content-Type', 'application/javascript;charset=UTF-8'),
             ('Content-Length', str(len(msg))),
             ('Access-Control-Allow-Origin', origin),
@@ -241,9 +239,9 @@ class XhrTransportHandler(Handler):
             ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
         )
         if allow:
-            writer.write_headers((
+            writer.add_headers(
                 ('Access-Control-Allow-Headers', allow),
-            ))
+            )
         writer.write_body(msg)
 
     def connection_lost(self, exc):
@@ -285,14 +283,14 @@ class XhrStreamingHandler(Handler):
         if origin == 'null':
             origin = '*'
 
-        writer.write_status(200)
-        writer.write_headers((
+        writer.status = 200
+        writer.add_headers(
             ('Content-Type', 'application/javascript;charset=UTF-8'),
             ('Access-Control-Allow-Origin', origin),
             ('Access-Control-Allow-Credentials', 'true'),
             ('Transfer-Encoding', 'chunked'),
             ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        ))
+        )
 
         body = (hex(2049)[2:] + '\r\n' + 'h' * 2048 + '\n\r\n').encode('utf-8')
         writer.write_body(body)
@@ -338,14 +336,14 @@ class XhrStreamingHandler(Handler):
         if origin == 'null':
             origin = '*'
 
-        writer.write_status(200)
-        writer.write_headers((
+        writer.status = 200
+        writer.add_headers(
             ('Content-Type', 'application/javascript;charset=UTF-8'),
             ('Access-Control-Allow-Origin', origin),
             ('Access-Control-Allow-Credentials', 'true'),
             ('Transfer-Encoding', 'chunked'),
             ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        ))
+        )
 
         body = (hex(2049)[2:] + '\r\n' + 'h' * 2048 + '\n\r\n').encode('utf-8')
         writer.write_body(body)
@@ -378,14 +376,14 @@ class EventSourceHandler(XhrStreamingHandler):
         if origin == 'null':
             origin = '*'
 
-        writer.write_status(200)
-        writer.write_headers((
+        writer.status = 200
+        writer.add_headers(
             ('Content-Type', 'text/event-stream;charset=UTF-8'),
             ('Access-Control-Allow-Origin', origin),
             ('Access-Control-Allow-Credentials', 'true'),
             ('Transfer-Encoding', 'chunked'),
             ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        ))
+        )
         body = (hex(2) + '\r\n\r\n\r\n').encode('utf-8')
         writer.write_body(body)
         if new:
@@ -443,8 +441,8 @@ class XhrRecievingHandler(Handler):
         if origin == 'null':
             origin = '*'
 
-        writer.write_status(204)
-        writer.write_headers(
+        writer.status = 204
+        writer.add_headers(
             ('Content-Type', 'text/plain;charset=UTF-8'),
             ('Access-Control-Allow-Origin', origin),
             ('Access-Control-Allow-Credentials', 'true'),
@@ -480,12 +478,12 @@ class HtmlFileHandler(XhrStreamingHandler):
             self._session.is_new = False
             self._session.endpoint.on_connect()
 
-        writer.write_status(200)
-        writer.write_headers((
+        writer.status = 200
+        writer.add_headers(
             ('Content-Type', 'text/html;charset=UTF-8'),
             ('Transfer-Encoding', 'chunked'),
             ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-        ))
+        )
         write_chunk(writer, (self.HTML_BODY % callback) + '\n' * 1024)
 
         if new:
@@ -538,12 +536,12 @@ class JsonpHandler(XhrStreamingHandler):
             self._session.is_new = False
             self._session.endpoint.on_connect()
             body = '{}("o");\r\n'.format(callback).encode('utf-8')
-            writer.write_status(200)
-            writer.write_headers((
+            writer.status = 200
+            writer.add_headers(
                 ('Content-Type', 'application/javascript;charset=UTF-8'),
                 ('Content-Length', str(len(body))),
                 ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
-            ))
+            )
             writer.write_body(body)
             return
 
@@ -562,9 +560,9 @@ class JsonpHandler(XhrStreamingHandler):
 
     @classmethod
     def go_away(cls, request, writer, message, callback):
-        writer.write_status(200)
+        writer.status = 200
         msg = "{}(\"{}\");\r\n".format(callback, message)
-        writer.write_headers(
+        writer.add_headers(
             ('Content-Type', 'application/javascript;charset=UTF-8'),
             ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0'),
             ('Content-Length', str(len(msg)))
@@ -579,8 +577,8 @@ class JsonpHandler(XhrStreamingHandler):
         msgs = 'a' + json.dumps(msgs, separators=(',', ':'))
         msg = '{}({});\r\n'.format(callback, json.dumps(msgs)).encode('utf-8')
 
-        writer.write_status(200)
-        writer.write_headers(
+        writer.status = 200
+        writer.add_headers(
             ('Content-Type', 'application;charset=UTF-8'),
             ('Content-Length', str(len(msg))),
             ('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
@@ -592,7 +590,6 @@ class JsonpSendingHandler(XhrRecievingHandler):
 
     @asyncio.coroutine
     def handle(self, request, writer):
-        yield from request._maybe_init_post()
         message = request.POST.get('d')
         if not message:
             message = (yield from request.body.read()).decode('utf-8')
@@ -606,8 +603,8 @@ class JsonpSendingHandler(XhrRecievingHandler):
             self._session.pending_messages.append(m)
         yield from self._session.consume()
 
-        writer.write_status(200)
-        writer.write_headers(
+        writer.status = 200
+        writer.add_headers(
             ('Content-Type', 'text/plain;charset=UTF-8'),
             ('Access-Control-Allow-Credentials', 'true'),
             ('Content-Length', '2'),

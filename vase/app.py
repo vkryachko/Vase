@@ -75,7 +75,6 @@ class Vase:
     def _decorate_callback(callback):
         @asyncio.coroutine
         def handle_normal(request, start_response, **kwargs):
-            yield from request._maybe_init_post()
 
             data = yield from asyncio.coroutine(callback)(request, **kwargs)
             if isinstance(data, HttpResponse):

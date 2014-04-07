@@ -10,6 +10,7 @@ def status_line(status):
     line = STATUS_MAP[status][0]
     return "{} {}".format(status, line).encode('ascii')
 
+
 class HttpResponse:
     def __init__(self, body, *, status=200, content_type='text/html'):
         if isinstance(body, str):

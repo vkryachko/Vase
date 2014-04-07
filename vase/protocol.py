@@ -31,9 +31,7 @@ class BaseProcessor:
 class BaseHttpProtocol(asyncio.StreamReaderProtocol):
     processor_factory = BaseProcessor
 
-    def __init__(self, handler_factory=None, *, keep_alive=None, loop=None):
-        if keep_alive is None:
-            keep_alive = _DEFAULT_KEEP_ALIVE
+    def __init__(self, handler_factory=None, *, keep_alive=_DEFAULT_KEEP_ALIVE, loop=None):
 
         if handler_factory is not None:
             self.processor_factory = handler_factory

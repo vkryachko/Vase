@@ -99,12 +99,12 @@ class SockJsHandler(RequestHandler):
     def handle(self, **kwargs):
         path = kwargs.pop(SockJsRoute.SOCKJS_ROUTE_MATCH, '')
         if not path or path == '/':
-            self._writer.write_status(200)
+            self._writer.status = 200
             content = b'Welcome to SockJS!\n'
-            self._writer.write_headers((
+            self._writer.add_headers(
                 ('Content-Type', 'text/plain;charset=UTF-8'),
                 ('Content-Length', str(len(content))),
-            ))
+            )
             self._writer.write_body(content)
             return
         if path == '/info':
@@ -153,7 +153,7 @@ class SockJsHandler(RequestHandler):
                 endpoint = self._instantiate_endpoint()
                 if hasattr(endpoint, 'authorize_request'):
                     if not (yield from asyncio.coroutine(sess.authorize_request)(self._request)):
-                        self._writer.write_status(401)
+                        self._writer.status = 401
                         self._writer.write_body('')
                         return
 
@@ -183,11 +183,11 @@ class SockJsHandler(RequestHandler):
 
     def not_found(self):
         content = b'404 Not Found!\n'
-        self._writer.write_status(404)
-        self._writer.write_headers(
-            ('Content-Type', 'text/plain; charset=UTF-8'),
-            ('Content-Length', str(len(content))),
-        )
+        w = self._writer
+        w.status = 404
+        w['Content-Type'] = 'text/plain; charset=UTF-8'
+        w['Content-Length'] = str(len(content))
+
         self._writer.write_body(content)
 
     def connection_lost(self, exc):

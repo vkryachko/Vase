@@ -4,13 +4,15 @@ from http.cookies import (
     CookieError,
     SimpleCookie
 )
-from http.server import BaseHTTPRequestHandler
-import http.client
+from http.client import responses as http_responses
+from email.message import Message as EmailMessage
 import urllib.parse
 
 from .stream import LimitedReader
 from .exceptions import BadRequestException
 from .util import MultiDict
+
+from collections import OrderedDict
 
 
 _DEFAULT_EXHAUST = 2**16
@@ -18,10 +20,10 @@ DELIMITER = b'\r\n'
 
 _FORM_URLENCODED = 'application/x-www-form-urlencoded'
 
-RESPONSES = {x: "{} {}".format(x, y[0]) for x, y in BaseHTTPRequestHandler.responses.items()}
+RESPONSES = {x: "{} {}".format(x, y) for x, y in http_responses.items()}
 
 
-class HttpRequest(http.client.HTTPMessage):
+class HttpRequest(EmailMessage):
     def __init__(self, method, uri, version, extra={}):
         self.method = method.upper()
         try:
@@ -113,40 +115,63 @@ class HttpWriter(StreamWriter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._headers_sent = False
-        self._headers = []
-        self._status = b''
-    
-    def write_status(self, status, version=b'1.1'):
-        if isinstance(status, int):
-            status = RESPONSES.get(status)
-        if isinstance(status, str):
-            status = status.encode('ascii')
-        if isinstance(version, str):
-            version = version.encode('ascii')
-        assert not self._headers_sent, "Headers have already been sent"
-        self._status = b'HTTP/' + version + b' ' + status + self.delimiter
+        self._headers = OrderedDict()
+        self._status = RESPONSES[200]
+        self.version = '1.1'
+        self._chunked = False
+        self._content_length = 0
 
-    def write_header(self, name, value):
-        assert not self._headers_sent, "Headers have already been sent"
-        self._headers.append((name, value))
+    @property
+    def status(self):
+        return self._status
 
-    def write_headers(self, *headers):
-        if len(headers) == 1:
-            headers = headers[0]
+    @status.setter
+    def status(self, value):
+        assert not self._headers_sent, "Headers have already been sent"
+        if isinstance(value, int):
+            value = RESPONSES.get(value)
+        self._status = value
+
+    def write_status(self, status):
+        self.status = status
+
+    def __setitem__(self, key, value):
+        assert not self._headers_sent, "Headers have already been sent"
+        self._headers[key.lower()] = (key, value)
+
+    def __getitem__(self, item):
+        try:
+            return self._headers.get(item.lower())[1]
+        except KeyError:
+            return None
+
+    def __delitem__(self, header):
+        assert not self._headers_sent, "Headers have already been sent"
+        try:
+            del self._headers[header.lower()]
+        except KeyError:
+            pass
+
+    def __contains__(self, item):
+        return item.lower() in self._headers
+
+    def add_headers(self, *headers):
         for name, value in headers:
-            self.write_header(name, value)
+            self[name] = value
+
+    def items(self):
+        return self._headers.values()
 
     def _maybe_send_headers(self):
         if not self._headers_sent:
-            _to_send = self._status
-            have_headers = False
-            for name, value in self._headers:
+            _to_send = 'HTTP/{} {}'.format(self.version, self._status).encode('ascii') + self.delimiter
+            for name, value in self.items():
                 if isinstance(name, str):
-                    name = name.encode('utf-8')
+                    name = name.encode('ascii')
                 if isinstance(value, str):
-                    value = value.encode('utf-8')
+                    value = value.encode('latin-1')
                 _to_send += name + b': ' + value + self.delimiter
-                have_headers = True
+
             _to_send += self.delimiter
             self.write(_to_send)
             self._headers_sent = True
@@ -166,8 +191,11 @@ class HttpWriter(StreamWriter):
 
     def restore(self):
         self._headers_sent = False
-        self._headers = []
-        self._status = b''
+        self._headers = OrderedDict()
+        self._status = ''
+
+    def _write_chunk(self, data):
+        pass
 
 
 class HttpParser:
@@ -215,4 +243,5 @@ class HttpParser:
                 request.append_to_last_header(value)
 
         request.body = reader
+        yield from request._maybe_init_post()
         return request
