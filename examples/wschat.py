@@ -13,10 +13,10 @@ html_body = open(os.path.join(os.path.dirname(__file__), 'main.html'), 'r').read
 def hello(request):
     return html_body
 
-@app.endpoint(path="/ws/chat", with_sockjs=False)
+@app.endpoint(path="/ws/chat")
 class Endpoint:
     def authorize_request(self, request):
-        self.username = request.querystring;
+        self.username = request['QUERY_STRING'];
         return True
 
     def on_connect(self):
