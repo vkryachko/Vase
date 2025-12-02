@@ -1,5 +1,6 @@
 import asyncio
-from asyncio.streams import StreamWriter, IncompleteReadError
+from asyncio.streams import StreamWriter
+from asyncio.exceptions import IncompleteReadError
 import collections
 import struct
 from enum import Enum
@@ -171,11 +172,10 @@ class WebSocketParser:
         self._reader = reader
         self._frames = collections.deque()
 
-    @asyncio.coroutine
-    def get_message(self):
+    async def get_message(self):
         while True:
             try:
-                frame = yield from self.parse_frame(self._reader)
+                frame = await self.parse_frame(self._reader)
             except IncompleteReadError:
                 frame = None
             if frame is None:
@@ -210,8 +210,8 @@ class WebSocketParser:
         return Message(opcode, payload, b'')
 
     @classmethod
-    def parse_frame(cls, reader):
-        data = yield from reader.readexactly(2)
+    async def parse_frame(cls, reader):
+        data = await reader.readexactly(2)
         if not data:
             return None
         first_byte, second_byte = struct.unpack('!BB', data)
@@ -244,22 +244,22 @@ class WebSocketParser:
             raise WebSocketFormatException("Clients MUST mask their frames")
 
         if length == 126:
-            data = yield from reader.readexactly(2)
+            data = await reader.readexactly(2)
             if not data:
                 return None
             length = struct.unpack_from('!H', data)[0]
         elif length == 127:
-            data = yield from reader.readexactly(8)
+            data = await reader.readexactly(8)
             if not data:
                 return None
             length = struct.unpack_from('!Q', data)[0]
 
-        mask = yield from reader.readexactly(4)
+        mask = await reader.readexactly(4)
         if not mask:
             return None
 
         if length:
-            payload = yield from reader.readexactly(length)
+            payload = await reader.readexactly(length)
             if not payload:
                 return None
         else:

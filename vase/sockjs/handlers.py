@@ -17,8 +17,7 @@ from ..handlers import WebSocketHandler
 class Handler(object):
     initiates_session = False
     allowed_methods = ('GET',)
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         raise NotImplementedError
 
     def connection_lost(self, exc):
@@ -93,8 +92,7 @@ class InfoHandler(Handler):
     def __init__(self, allow_websocket=True):
         self._allow_websocket = allow_websocket
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         origin = request.get('origin', 'null')
         if origin == 'null':
             origin = '*'
@@ -155,8 +153,7 @@ class IFrameHandler(Handler):
 
     path_re = re.compile("/iframe[0-9-.a-z_]*.html");
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         if request.method != 'GET':
             return self.not_allowed(writer, ['GET'])
 
@@ -186,10 +183,9 @@ class WebSocketSockJsHandler(Handler):
         self._context = context
         self._reader = reader
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         ws_handler = WebSocketHandler(request, self._reader, writer, self._endpoint, self._context)
-        return (yield from ws_handler.handle())
+        return await ws_handler.handle()
 
 
 class XhrTransportHandler(Handler):
@@ -202,8 +198,7 @@ class XhrTransportHandler(Handler):
         self._context = context
         self._reader = reader
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         if self._session.is_new:
             self._session.is_new = False
             self._session.endpoint.on_connect()
@@ -214,7 +209,7 @@ class XhrTransportHandler(Handler):
 
         if not self._session.outgoing_messages:
             self._session.waiter = Future()
-            yield from self._session.waiter
+            await self._session.waiter
 
             if self._session.closed:
                 self._send_message(request, writer, 'c[3000,"Go away!"]')
@@ -272,8 +267,7 @@ class XhrStreamingHandler(Handler):
         self._context = context
         self._reader = reader
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         new = self._session.is_new
         if self._session.is_new:
             self._session.is_new = False
@@ -309,7 +303,7 @@ class XhrStreamingHandler(Handler):
         written += self._send_messages(writer)
         while True:
             self._session.waiter = Future()
-            yield from self._session.waiter
+            await self._session.waiter
             written += self._send_messages(writer)
             if written >= 4096:
                 writer.write(b'0\r\n\r\n')
@@ -365,8 +359,7 @@ class EventSourceHandler(XhrStreamingHandler):
     initiates_session = True
     allowed_methods = ('POST',)
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         new = self._session.is_new
         if self._session.is_new:
             self._session.is_new = False
@@ -393,7 +386,7 @@ class EventSourceHandler(XhrStreamingHandler):
         written += self._send_messages(writer)
         while True:
             self._session.waiter = Future()
-            yield from self._session.waiter
+            await self._session.waiter
             written += self._send_messages(writer)
             if written >= 4096:
                 writer.write(b'0\r\n\r\n')
@@ -423,9 +416,8 @@ class XhrRecievingHandler(Handler):
         self._context = context
         self._reader = reader
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
-        message = yield from request.body.read()
+    async def handle(self, request, writer):
+        message = await request.body.read()
         if not message:
             return self.send_500('Payload expected.', writer)
         try:
@@ -434,7 +426,7 @@ class XhrRecievingHandler(Handler):
             return self.send_500('Broken JSON encoding.', writer)
         for m in msgs:
             self._session.pending_messages.append(m)
-        yield from self._session.consume()
+        await self._session.consume()
 
         allow = request.get('access-control-request-headers')
         origin = request.get('origin', 'null')
@@ -467,8 +459,7 @@ class HtmlFileHandler(XhrStreamingHandler):
   </script>
 '''.strip()
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         callback = request.GET.get('c')
         if not callback:
             self.send_500('"callback" parameter required', writer)
@@ -493,7 +484,7 @@ class HtmlFileHandler(XhrStreamingHandler):
         written += self._send_messages(writer)
         while True:
             self._session.waiter = Future()
-            yield from self._session.waiter
+            await self._session.waiter
             written += self._send_messages(writer)
             if written >= 4096:
                 writer.write(b'0\r\n\r\n')
@@ -524,8 +515,7 @@ def write_chunk(writer, message):
 
 
 class JsonpHandler(XhrStreamingHandler):
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         callback = request.GET.get('c')
         if not callback:
             self.send_500('"callback" parameter required', writer)
@@ -554,7 +544,7 @@ class JsonpHandler(XhrStreamingHandler):
             return
 
         self._session.waiter = Future()
-        yield from self._session.waiter
+        await self._session.waiter
         self._send_messages(writer, callback)
         writer.close()
 
@@ -588,11 +578,10 @@ class JsonpHandler(XhrStreamingHandler):
 
 class JsonpSendingHandler(XhrRecievingHandler):
 
-    @asyncio.coroutine
-    def handle(self, request, writer):
+    async def handle(self, request, writer):
         message = request.POST.get('d')
         if not message:
-            message = (yield from request.body.read()).decode('utf-8')
+            message = (await request.body.read()).decode('utf-8')
         if not message:
             return self.send_500('Payload expected.', writer)
         try:
@@ -601,7 +590,7 @@ class JsonpSendingHandler(XhrRecievingHandler):
             return self.send_500('Broken JSON encoding.', writer)
         for m in msgs:
             self._session.pending_messages.append(m)
-        yield from self._session.consume()
+        await self._session.consume()
 
         writer.status = 200
         writer.add_headers(

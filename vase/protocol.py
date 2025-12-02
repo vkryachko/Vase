@@ -17,8 +17,7 @@ class BaseProcessor:
         self._reader = reader
         self._writer = writer
 
-    @asyncio.coroutine
-    def handle_request(self, request):
+    async def handle_request(self, request):
         self._transport.write(b'HTTP/1.1 404 NOT FOUND\r\nContent-Length: 13\r\n\r\n404 Not Found')
 
     def on_timeout(self):
@@ -50,7 +49,7 @@ class BaseHttpProtocol(asyncio.StreamReaderProtocol):
 
         self._handler = self._build_handler()
 
-        self._task = asyncio.async(self._handle_client())
+        self._task = asyncio.ensure_future(self._handle_client())
         self._task.add_done_callback(self._maybe_log_exception)
 
         self._reset_timeout()
@@ -71,11 +70,10 @@ class BaseHttpProtocol(asyncio.StreamReaderProtocol):
         self._reset_timeout()
         super().data_received(data)
 
-    @asyncio.coroutine
-    def _handle_client(self):
+    async def _handle_client(self):
         while True:
             try:
-                req = yield from HttpParser.parse(self._reader)
+                req = await HttpParser.parse(self._reader)
             except BadRequestException as e:
                 self._bad_request(self._writer, e)
                 self._writer.close()
@@ -85,13 +83,13 @@ class BaseHttpProtocol(asyncio.StreamReaderProtocol):
                 break
 
             try:
-                yield from self._handler.handle_request(req)
+                await self._handler.handle_request(req)
             finally:
                 if self._should_close_conn_immediately(req):
                     if self._writer:
                         self._writer.close()
                 else:
-                    yield from req.body.read()
+                    await req.body.read()
                     if self._writer is not None:
                         self._writer.restore()
 
@@ -144,6 +142,6 @@ class BaseHttpProtocol(asyncio.StreamReaderProtocol):
 if __name__ == '__main__':  # pragma: no cover
     loop = asyncio.get_event_loop()
     host, port = 'localhost', 3000
-    asyncio.async(loop.create_server(lambda: BaseHttpProtocol(loop=loop),
+    asyncio.ensure_future(loop.create_server(lambda: BaseHttpProtocol(loop=loop),
                 host, port))
     loop.run_forever()
