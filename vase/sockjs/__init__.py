@@ -44,12 +44,11 @@ class Session(object):
     def attach(self, endpoint):
         self.endpoint = endpoint
 
-    @asyncio.coroutine
-    def consume(self):
+    async def consume(self):
         if self.endpoint:
             while self.pending_messages:
                 msg = self.pending_messages.popleft()
-                yield from asyncio.coroutine(self.endpoint.on_message)(msg)
+                await self.endpoint.on_message(msg)
 
 
 class SockJsRoute(ContextHandlingCallbackRoute):
@@ -95,8 +94,7 @@ class SockJsHandler(RequestHandler):
 
         self._session = None
 
-    @asyncio.coroutine
-    def handle(self, **kwargs):
+    async def handle(self, **kwargs):
         path = kwargs.pop(SockJsRoute.SOCKJS_ROUTE_MATCH, '')
         if not path or path == '/':
             self._writer.status = 200
@@ -108,13 +106,13 @@ class SockJsHandler(RequestHandler):
             self._writer.write_body(content)
             return
         if path == '/info':
-            yield from self._info_handler.handle(self._request, self._writer)
+            await self._info_handler.handle(self._request, self._writer)
             return
         elif self._iframe_handler.path_re.match(path):
-            yield from self._iframe_handler.handle(self._request, self._writer)
+            await self._iframe_handler.handle(self._request, self._writer)
             return
         elif path == '/websocket':
-            yield from self._ws_handler.handle(self._request, self._writer)
+            await self._ws_handler.handle(self._request, self._writer)
             return
         else:
             parts = path[1:].split("/")
@@ -124,7 +122,7 @@ class SockJsHandler(RequestHandler):
             server, session, transport = parts
             if not self._validate_parts(server, session, transport):
                 return self.not_found()
-            return (yield from self._handle_transport(session, transport))
+            return await self._handle_transport(session, transport)
 
     def _validate_parts(self, server, session, transport):
         if not server or not session or not transport:
@@ -135,8 +133,7 @@ class SockJsHandler(RequestHandler):
             return False
         return True
 
-    @asyncio.coroutine
-    def _handle_transport(self, session, transport):
+    async def _handle_transport(self, session, transport):
         handler = self._transport_handlers.get(transport)
         if handler is None:
             return self.not_found()
@@ -152,7 +149,7 @@ class SockJsHandler(RequestHandler):
             else:
                 endpoint = self._instantiate_endpoint()
                 if hasattr(endpoint, 'authorize_request'):
-                    if not (yield from asyncio.coroutine(sess.authorize_request)(self._request)):
+                    if not await sess.authorize_request(self._request):
                         self._writer.status = 401
                         self._writer.write_body('')
                         return
@@ -174,7 +171,7 @@ class SockJsHandler(RequestHandler):
 
         handler = handler(self._request, sess, self._context)
         self._current_handler = handler
-        yield from handler.handle(self._request, self._writer)
+        await handler.handle(self._request, self._writer)
 
     def _instantiate_endpoint(self):
         end = self._endpoint()

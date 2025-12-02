@@ -99,12 +99,11 @@ class HttpRequest(EmailMessage):
     def _has_form(self):
         return self.get('content-type', '').lower() == _FORM_URLENCODED
 
-    @asyncio.coroutine
-    def _maybe_init_post(self):
+    async def _maybe_init_post(self):
         if self._post_inited:
             return
         if self._has_form():
-            body = yield from self.body.read()
+            body = await self.body.read()
             self.POST = MultiDict(urllib.parse.parse_qs(body.decode('utf-8')))
         self._post_inited = True
 
@@ -200,9 +199,8 @@ class HttpWriter(StreamWriter):
 
 class HttpParser:
     @staticmethod
-    @asyncio.coroutine
-    def parse(reader):
-        l = yield from reader.readline()
+    async def parse(reader):
+        l = await reader.readline()
         if not l:
             return
         l = l.rstrip(DELIMITER)
@@ -224,7 +222,7 @@ class HttpParser:
         request = HttpRequest(method, uri, version, extra)
 
         while True:
-            l = yield from reader.readline()
+            l = await reader.readline()
             if not l:
                 return
             if l == DELIMITER:
@@ -243,5 +241,5 @@ class HttpParser:
                 request.append_to_last_header(value)
 
         request.body = reader
-        yield from request._maybe_init_post()
+        await request._maybe_init_post()
         return request

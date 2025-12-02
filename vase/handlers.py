@@ -34,7 +34,7 @@ class CallbackRouteHandler(RequestHandler):
         self._writer = writer
         self._callback = callback
 
-    def handle(self, **kwargs):
+    async def handle(self, **kwargs):
         def start_response(status, headers):
             self._writer.write_status(status)
             self._writer.add_headers(*headers)
@@ -43,7 +43,7 @@ class CallbackRouteHandler(RequestHandler):
                 self._writer.write(data)
             return write
 
-        result = yield from self._callback(self._request, start_response, **kwargs)
+        result = await self._callback(self._request, start_response, **kwargs)
         self._writer.writelines(result)
 
 
@@ -56,14 +56,14 @@ class WebSocketHandler(RequestHandler):
         self._endpoint = None
         self._context = context
 
-    def handle(self, **kwargs):
+    async def handle(self, **kwargs):
         self._endpoint = self._endpoint_factory()
         self._endpoint.bag = self._context
 
         self._endpoint.transport = WebSocketWriter(self._writer)
 
         if hasattr(self._endpoint, 'authorize_request'):
-            if not (yield from asyncio.coroutine(self._endpoint.authorize_request)(self._request)):
+            if not await self._endpoint.authorize_request(self._request):
                 self._writer.write_status(b'401 Anauthorized')
                 self._writer.write_body(b'')
                 return
@@ -86,19 +86,18 @@ class WebSocketHandler(RequestHandler):
         )
         self._writer.write_body(b'')
 
-        yield from self._switch_protocol()
+        await self._switch_protocol()
 
-    def _switch_protocol(self):
+    async def _switch_protocol(self):
         self._endpoint.on_connect()
 
-        yield from self._parse_messages()
+        await self._parse_messages()
 
-    @asyncio.coroutine
-    def _parse_messages(self):
+    async def _parse_messages(self):
         parser = WebSocketParser(self._reader)
         while True:
             try:
-                msg = yield from parser.get_message()
+                msg = await parser.get_message()
             except WebSocketFormatException:
                 self._writer.close()
                 return
@@ -114,7 +113,7 @@ class WebSocketHandler(RequestHandler):
                 elif msg.opcode == OpCode.ping:
                     self._writer.write(FrameBuilder.pong(masked=False, payload=msg.payload))
             else:
-                yield from asyncio.coroutine(self._endpoint.on_message)(msg.payload)
+                await self._endpoint.on_message(msg.payload)
 
     def persistent_connection(self):
         return True

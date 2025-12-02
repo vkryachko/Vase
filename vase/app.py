@@ -31,8 +31,7 @@ class Vase:
         self._name = name
         self._routes = []
 
-    @asyncio.coroutine
-    def _handle_404(self, request, start_response):
+    async def _handle_404(self, request, start_response):
         data = 'Not found'.encode('utf-8')
         headers = (
             (b'Content-Type', b'text/plain'),
@@ -67,16 +66,15 @@ class Vase:
 
         def processor_factory(transport, protocol, reader, writer):
             return RoutingHttpProcessor(transport, protocol, reader, writer, routes=self._routes)
-        asyncio.async(loop.create_server(lambda: BaseHttpProtocol(processor_factory, loop=loop),
+        asyncio.ensure_future(loop.create_server(lambda: BaseHttpProtocol(processor_factory, loop=loop),
                     host, port))
         loop.run_forever()
 
     @staticmethod
     def _decorate_callback(callback):
-        @asyncio.coroutine
-        def handle_normal(request, start_response, **kwargs):
+        async def handle_normal(request, start_response, **kwargs):
 
-            data = yield from asyncio.coroutine(callback)(request, **kwargs)
+            data = await callback(request, **kwargs)
             if isinstance(data, HttpResponse):
                 response = data
             else:

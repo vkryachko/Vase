@@ -12,8 +12,7 @@ class RoutingHttpProcessor(BaseProcessor):
         self._handler = None
         super().__init__(transport, protocol, reader, writer)
 
-    @asyncio.coroutine
-    def handle_request(self, request):
+    async def handle_request(self, request):
         current_route = None
         matchdict = {}
         for route in self._routes:
@@ -22,10 +21,10 @@ class RoutingHttpProcessor(BaseProcessor):
                 current_route = route
                 break
         if current_route is None:
-            return (yield from super().handle_request(request))
+            return await super().handle_request(request)
         self._handler = current_route.handler_factory(request, self._reader, self._writer)
 
-        return (yield from self._handler.handle(**matchdict))
+        return await self._handler.handle(**matchdict)
 
     def on_timeout(self):
         self._handler.on_timeout()
@@ -53,7 +52,7 @@ class RequestSpec:
         )
 
 
-_R = re.compile("{((\w+:)?[^{}]+)}")
+_R = re.compile(r"{((\w+:)?[^{}]+)}")
 
 
 def _regex_substituter(m):
